@@ -10,13 +10,13 @@
         .app-container { display: flex; flex-direction: column; height: 100vh; }
         
         header { padding: 15px; text-align: center; background: rgba(0,0,0,0.9); border-bottom: 1px solid #333; }
-        .status-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 14px; }
-        #status-text { color: var(--primary); font-weight: bold; }
-        #timer-text { color: #888; }
-        .progress-container { width: 100%; height: 6px; background: #222; border-radius: 3px; overflow: hidden; }
-        #progress-fill { width: 0%; height: 100%; background: var(--primary); transition: width 0.3s ease; }
+        .status-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 14px; font-weight: bold; }
+        #status-text { color: var(--primary); transition: all 0.3s; }
+        #timer-text { color: #888; font-variant-numeric: tabular-nums; }
+        .progress-bar-bg { width: 100%; height: 8px; background: #222; border-radius: 4px; overflow: hidden; }
+        #progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #007AFF, #5AC8FA); transition: width 0.4s cubic-bezier(0.1, 0.7, 0.1, 1); }
 
-        .scanner-section { flex: 1; position: relative; background: #111; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .scanner-section { flex: 1; position: relative; overflow: hidden; background: #111; display: flex; align-items: center; justify-content: center; }
         #video, #snap-preview { width: 100%; height: 100%; object-fit: cover; position: absolute; }
         #snap-preview { display: none; z-index: 5; }
         
@@ -28,13 +28,14 @@
         .bottom-left { bottom:-2px; left:-2px; border-right:0; border-top:0; }
         .bottom-right { bottom:-2px; right:-2px; border-left:0; border-top:0; }
 
-        footer { padding: 20px; background: rgba(0,0,0,0.95); border-top: 1px solid #333; }
-        #plate-number { font-size: 48px; font-weight: 800; text-align: center; margin-bottom: 10px; height: 60px; color: #fff; }
+        footer { padding: 20px 20px calc(25px + env(safe-area-inset-bottom)); background: rgba(0,0,0,0.95); border-top: 1px solid #333; }
+        #plate-number { font-size: 52px; font-weight: 800; text-align: center; margin-bottom: 10px; height: 60px; color: #fff; letter-spacing: 3px; }
         #info { font-size: 13px; color: #888; text-align: center; margin-bottom: 15px; min-height: 1.2em; }
         
-        .btn-group { display: flex; gap: 10px; width: 100%; max-width: 600px; margin: 0 auto; }
-        button { flex: 1; padding: 18px 0; border-radius: 12px; border: none; font-size: 18px; font-weight: bold; color: white; background: var(--primary); }
-        button:disabled { opacity: 0.2; }
+        .btn-group { display: flex; gap: 12px; width: 100%; max-width: 600px; margin: 0 auto; }
+        button { flex: 1; padding: 18px 0; border-radius: 12px; border: none; font-size: 18px; font-weight: bold; color: white; background: var(--primary); -webkit-tap-highlight-color: transparent; }
+        button:active { transform: scale(0.98); opacity: 0.9; }
+        button:disabled { opacity: 0.1; filter: grayscale(1); }
         #retryBtn { background: #333; }
         #runAiBtn { background: var(--success); }
     </style>
@@ -43,35 +44,43 @@
 <div class="app-container">
     <header>
         <div class="status-header">
-            <span id="status-text">載入系統中...</span>
-            <span id="timer-text">15s</span>
+            <span id="status-text">準備環境...</span>
+            <span id="timer-text">剩餘 --s</span>
         </div>
-        <div class="progress-container"><div id="progress-fill"></div></div>
+        <div class="progress-bar-bg"><div id="progress-fill"></div></div>
     </header>
 
     <main class="scanner-section">
         <video id="video" autoplay playsinline muted></video>
         <canvas id="snap-preview"></canvas>
-        <div class="scan-overlay"><div class="scan-frame"><div class="corner top-left"></div><div class="corner top-right"></div><div class="corner bottom-left"></div><div class="corner bottom-right"></div></div></div>
+        <div class="scan-overlay">
+            <div class="scan-frame">
+                <div class="corner top-left"></div><div class="corner top-right"></div>
+                <div class="corner bottom-left"></div><div class="corner bottom-right"></div>
+            </div>
+        </div>
     </main>
 
     <footer>
         <div id="plate-number">----</div>
-        <div id="info">正在建立 AI 環境...</div>
+        <div id="info">正在下載 AI 核心模組...</div>
         <div class="btn-group">
             <button id="startBtn" disabled>啟動鏡頭</button>
             <button id="captureBtn" style="display:none">定格拍照</button>
-            <button id="runAiBtn" style="display:none">確認辨識</button>
-            <button id="retryBtn" style="display:none">重拍</button>
+            <button id="runAiBtn" style="display:none">多幀投票辨識</button>
+            <button id="retryBtn" style="display:none">重新拍攝</button>
         </div>
     </footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.3/tesseract.min.js"></script>
-<script src="https://docs.opencv.org/4.7.0/opencv.js" async onload="cvLoaded()"></script>
+<script id="opencv-js" src="https://docs.opencv.org/4.7.0/opencv.js" async></script>
 
 <script>
-let cvReady = false, ocrReady = false, worker = null, frameBuffer = [], timeLeft = 15;
+// =================== 系統狀態監控 ===================
+let cvReady = false, ocrReady = false, worker = null, frameBuffer = [];
+let timeLeft = 18; // 預計總載入時間 (s)
+const LEARN_KEY = 'plate_learn_map';
 
 const el = {
     status: document.getElementById('status-text'),
@@ -87,98 +96,126 @@ const el = {
     snap: document.getElementById('snap-preview')
 };
 
-// --- 進度條與倒數 ---
+// --- 進度更新器 ---
+function setProgress(p, msg) {
+    el.progress.style.width = p + "%";
+    if (msg) {
+        el.status.innerText = msg;
+        el.info.innerText = `[系統] ${msg}`;
+    }
+    if (p >= 100) {
+        clearInterval(timerInterval);
+        el.timer.innerText = "Ready";
+        el.start.disabled = false;
+        el.info.innerText = "所有模組已就緒，請開啟鏡頭";
+    }
+}
+
+// 倒計時邏輯
 const timerInterval = setInterval(() => {
-    if (timeLeft > 0) {
+    if (timeLeft > 1) {
         timeLeft--;
-        el.timer.innerText = timeLeft + "s";
+        el.timer.innerText = `剩餘 ${timeLeft}s`;
     }
 }, 1000);
 
-function updateProgress(p, msg) {
-    el.progress.style.width = p + "%";
-    if (msg) el.status.innerText = msg;
-    if (p >= 100) {
-        clearInterval(timerInterval);
-        el.timer.innerText = "OK";
-        el.start.disabled = false;
-        el.info.innerText = "就緒，請啟動鏡頭";
+// --- 模組載入序列 ---
+window.onload = () => {
+    setProgress(15, "正在獲取 OpenCV 腳本...");
+    checkCV();
+};
+
+function checkCV() {
+    // 檢查 OpenCV 是否初始化
+    if (typeof cv !== 'undefined' && cv.Mat) {
+        cvReady = true;
+        setProgress(40, "OpenCV 核心初始化完成");
+        initOCR();
+    } else {
+        // 如果腳本載入太慢，每 500ms 檢查一次
+        setTimeout(checkCV, 500);
     }
 }
-
-// --- 模組載入邏輯 ---
-function cvLoaded() {
-    cv.onRuntimeInitialized = () => {
-        cvReady = true;
-        updateProgress(50, "視覺模組 OK");
-        initOCR();
-    };
-}
-
-// 萬一 OpenCV onload 沒觸發的保險機制
-setTimeout(() => {
-    if (!cvReady && typeof cv !== 'undefined' && cv.Mat) {
-        cvReady = true;
-        updateProgress(50, "視覺模組 OK");
-        initOCR();
-    }
-}, 5000);
 
 async function initOCR() {
     try {
-        updateProgress(70, "同步 AI 模型...");
+        setProgress(55, "啟動 Tesseract 主程式...");
         worker = await Tesseract.createWorker('eng', 1, {
-            logger: m => { if(m.status === 'loading language traineddata') updateProgress(85, "模型下載中..."); }
+            logger: m => {
+                if (m.status === 'loading language traineddata') {
+                    setProgress(75, `下載 AI 模型 (${Math.round(m.progress * 100)}%)`);
+                }
+                if (m.status === 'initializing api') {
+                    setProgress(90, "優化神經網路運算...");
+                }
+            }
         });
+        
         await worker.setParameters({
             tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-            tessedit_pageseg_mode: '7'
+            tessedit_pageseg_mode: '7' // 單行模式
         });
+        
         ocrReady = true;
-        updateProgress(100, "AI 引擎就緒");
+        setProgress(100, "系統完全就緒");
     } catch (e) {
-        updateProgress(100, "OCR 模式載入 (輕量版)");
-        ocrReady = true;
+        setProgress(100, "核心錯誤：請檢查網路並重整");
+        el.status.style.color = "red";
     }
 }
 
-// --- 核心邏輯 ---
-const clean = t => t.replace(/O/g,'0').replace(/I/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8').replace(/[^A-Z0-9]/g, '');
+// =================== 核心影像處理與投票系統 ===================
+const isTaiwanMoto = t => /^[A-Z]{3}[0-9]{3,4}$/.test(t) || /^[0-9]{3}[A-Z]{3}$/.test(t);
+const cleanText = t => t.replace(/O/g,'0').replace(/I/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8').replace(/[^A-Z0-9]/g, '');
 
-async function preProcess(imgData) {
-    if (!cvReady) return imgData; // OpenCV 沒動就跳過處理
-    try {
-        let src = cv.matFromImageData(imgData);
-        let dst = new cv.Mat();
-        cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
-        cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
-        let canvas = document.createElement('canvas');
-        cv.imshow(canvas, dst);
-        src.delete(); dst.delete();
-        return canvas;
-    } catch (e) { return imgData; }
+// 
+async function opencvFilter(imgData) {
+    if (!cvReady) return imgData;
+    let src = cv.matFromImageData(imgData);
+    let dst = new cv.Mat();
+    
+    // 灰階與對比增強
+    cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+    // 自適應二二值化：過濾陰影與反光
+    cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 13, 2);
+    
+    let canvas = document.createElement('canvas');
+    cv.imshow(canvas, dst);
+    
+    src.delete(); dst.delete();
+    return canvas;
 }
 
+// =================== 互動事件邏輯 ===================
 el.start.onclick = async () => {
     try {
-        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } } });
-        el.video.srcObject = s;
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment", width: { ideal: 1280 } } 
+        });
+        el.video.srcObject = stream;
         el.start.style.display = "none";
         el.capture.style.display = "block";
-    } catch (e) { alert("鏡頭權限遭拒，請確認是否為 HTTPS 環境"); }
+    } catch (e) {
+        alert("鏡頭啟動失敗：請確保使用 HTTPS 環境且已授予權限");
+    }
 };
 
 el.capture.onclick = async () => {
     frameBuffer = [];
     const canvas = document.createElement('canvas');
-    canvas.width = el.video.videoWidth; canvas.height = el.video.videoHeight;
+    canvas.width = el.video.videoWidth; 
+    canvas.height = el.video.videoHeight;
     const ctx = canvas.getContext('2d');
+
+    // 連拍 3 幀，為投票系統準備
     for(let i=0; i<3; i++) {
         ctx.drawImage(el.video, 0, 0);
-        frameBuffer.push(ctx.getImageData(0,0, canvas.width, canvas.height));
+        frameBuffer.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
         await new Promise(r => setTimeout(r, 120));
     }
-    el.snap.width = canvas.width; el.snap.height = canvas.height;
+
+    el.snap.width = canvas.width;
+    el.snap.height = canvas.height;
     el.snap.getContext('2d').putImageData(frameBuffer[2], 0, 0);
     el.snap.style.display = "block";
     el.capture.style.display = "none";
@@ -188,23 +225,30 @@ el.capture.onclick = async () => {
 
 el.run.onclick = async () => {
     el.run.disabled = true;
-    el.status.innerText = "交叉辨識中...";
+    setProgress(50, "啟動多幀交叉比對...");
+    
     let votes = [];
     for (let i = 0; i < frameBuffer.length; i++) {
-        const processed = await preProcess(frameBuffer[i]);
+        const processed = await opencvFilter(frameBuffer[i]);
         const res = await worker.recognize(processed);
-        const txt = clean(res.data.text);
+        const txt = cleanText(res.data.text);
         if (txt.length >= 5) votes.push(txt);
+        setProgress(50 + (i * 15), `分析中...幀數 ${i+1}/3`);
     }
+
     if (votes.length > 0) {
-        const count = votes.reduce((a, b) => { a[b] = (a[b] || 0) + 1; return a; }, {});
-        const final = Object.keys(count).sort((a,b) => count[b] - count[a])[0];
+        const countMap = votes.reduce((a, b) => { a[b] = (a[b] || 0) + 1; return a; }, {});
+        const final = Object.keys(countMap).sort((a, b) => countMap[b] - countMap[a])[0];
+        
         el.plate.innerText = final;
-        el.plate.style.color = (final.length >= 6) ? "#34C759" : "#FF9500";
+        el.plate.style.color = isTaiwanMoto(final) ? "#34C759" : "#FF9500";
         window.speechSynthesis.speak(new SpeechSynthesisUtterance("號碼 " + final));
-    } else { el.plate.innerText = "辨識失敗"; }
+    } else {
+        el.plate.innerText = "無法辨識";
+    }
+
     el.run.disabled = false;
-    el.status.innerText = "分析完成";
+    setProgress(100, "分析完成");
 };
 
 el.retry.onclick = () => {
