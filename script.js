@@ -1,51 +1,55 @@
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const plateDisplay = document.getElementById('plate-number');
-const statusText = document.getElementById('status');
+const previewText = document.getElementById('live-preview');
+const confirmBtn = document.getElementById('confirmBtn');
 const startBtn = document.getElementById('startBtn');
 
+let isScanning = false;
+
 async function initCamera() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment", width: 1280, height: 720 }
-        });
-        video.srcObject = stream;
-        statusText.innerText = "SCANNING...";
-        startBtn.style.display = "none";
-        requestAnimationFrame(processFrame);
-    } catch (err) {
-        statusText.innerText = "CAMERA ERROR";
-    }
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment", width: 1280 } 
+    });
+    video.srcObject = stream;
+    startBtn.style.display = "none";
+    isScanning = true;
+    requestAnimationFrame(processFrame);
 }
 
 async function processFrame() {
-    if (video.paused || video.ended) return;
+    if (!isScanning) return;
 
     const ctx = canvas.getContext('2d');
-    canvas.width = 640; 
-    canvas.height = 360;
+    // 設定擷取比例：因為框框在上方，我們只抓取畫面中上的部分
+    canvas.width = 400;
+    canvas.height = 200;
 
-    // 關鍵調整：裁切範圍上移 (對應 CSS 的 padding-top)
-    // 我們抓取影片畫面中上方約 30% 處的影像
-    ctx.drawImage(video, video.videoWidth * 0.2, video.videoHeight * 0.2, video.videoWidth * 0.6, video.videoHeight * 0.3, 0, 0, canvas.width, canvas.height);
+    // 擷取影像中上的區域
+    ctx.drawImage(video, video.videoWidth*0.2, video.videoHeight*0.1, video.videoWidth*0.6, video.videoHeight*0.4, 0, 0, 400, 200);
 
     try {
         const result = await Tesseract.recognize(canvas, 'eng', {
             tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
         });
 
-        const match = result.data.text.match(/[A-Z0-9-]{5,8}/);
+        const rawText = result.data.text.trim();
+        previewText.innerText = "偵測中: " + (rawText || "...");
+
+        // 正則匹配：搜尋符合車牌格式的字串
+        const match = rawText.match(/[A-Z0-9-]{5,8}/);
         if (match) {
             plateDisplay.innerText = match[0];
-            // 辨識到時閃爍提示
-            document.querySelector('.scan-frame').style.borderColor = "#fff";
-            setTimeout(() => {
-                document.querySelector('.scan-frame').style.borderColor = "rgba(255,255,255,0.3)";
-            }, 200);
+            confirmBtn.style.display = "block"; // 顯示確認按鈕
         }
     } catch (e) {}
 
-    setTimeout(processFrame, 1000); // 每一秒辨識一次，平衡性能與電力
+    setTimeout(processFrame, 800);
 }
+
+confirmBtn.addEventListener('click', () => {
+    alert("已確認車牌號碼：" + plateDisplay.innerText);
+    // 可以在這裡把資料送到後端或儲存
+});
 
 startBtn.addEventListener('click', initCamera);
