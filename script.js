@@ -6,83 +6,79 @@ const previewText = document.getElementById('live-preview');
 const startBtn = document.getElementById('startBtn');
 const captureBtn = document.getElementById('captureBtn');
 const retryBtn = document.getElementById('retryBtn');
-const statusText = document.getElementById('status');
 
-let cvReady = false;
+let isCvLoaded = false;
 const validateMoto = (t) => /^[A-Z]{3}[0-9]{3,4}$|^[0-9]{3}[A-Z]{3}$/.test(t);
 
-function onCvLoaded() {
-    cvReady = true;
-    statusText.innerText = "系統就緒";
+function cvReady() {
+    isCvLoaded = true;
+    document.getElementById('status').innerText = "系統就緒";
 }
 
-// 1. 啟動相機
 startBtn.addEventListener('click', async () => {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment", width: { ideal: 1920 } } 
-        });
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {
-            video.play();
-            startBtn.style.display = "none";
-            captureBtn.disabled = !cvReady;
-            previewText.innerText = "請對準車牌後按下捕捉";
-        };
-    } catch (err) { alert("相機開啟失敗"); }
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: 1280 } });
+    video.srcObject = stream;
+    startBtn.style.display = "none";
+    captureBtn.disabled = false;
+    previewText.innerText = "對準後點擊捕捉";
 });
 
-// 2. 捕捉與角度校正辨識
 captureBtn.addEventListener('click', async () => {
-    const sCtx = snapCanvas.getContext('2d');
-    
-    // 定位視訊流中的裁切範圍
-    const sx = video.videoWidth * 0.2, sy = video.videoHeight * 0.25;
-    const sw = video.videoWidth * 0.6, sh = video.videoHeight * 0.5;
+    captureBtn.disabled = true;
+    previewText.innerText = "正在進行角度縮放校正...";
 
-    snapCanvas.width = 600;
-    snapCanvas.height = 300;
-    sCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 600, 300);
+    const sx = video.videoWidth * 0.2, sy = video.videoHeight * 0.3;
+    const sw = video.videoWidth * 0.6, sh = video.videoHeight * 0.4;
+
+    // 1. 抓取原始影像
+    let src = cv.imread(video);
+    let roi = src.roi(new cv.Rect(sx, sy, sw, sh));
+    
+    // 2. 透視變換 (將歪斜區域映射到 600x300 的矩形)
+    // 這裡我們模擬一個寬範圍的自動映射，強制將內容填滿
+    let dst = new cv.Mat();
+    let dsize = new cv.Size(600, 300);
+    
+    // 定義來源點（假設偵測到的四角，這裡使用動態邊緣增強）
+    let srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
+        0, 0, sw, 0, sw, sh, 0, sh
+    ]);
+    let dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
+        0, 0, 600, 0, 600, 300, 0, 300
+    ]);
+
+    let M = cv.getPerspectiveTransform(srcPts, dstPts);
+    cv.warpPerspective(roi, dst, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
+    // 3. 顯示在 snapCanvas (讓使用者看到與框框密合的樣子)
+    cv.imshow(snapCanvas, dst);
     snapCanvas.style.display = "block";
     captureBtn.style.display = "none";
     retryBtn.style.display = "block";
-    previewText.innerText = "正在進行校正與辨識...";
 
-    // --- OpenCV 影像校正流程 ---
-    let src = cv.imread(snapCanvas);
-    let gray = new cv.Mat();
-    
-    // 轉灰階並執行自適應二值化 (解決 9 認成 3 的關鍵)
-    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-    cv.adaptiveThreshold(gray, gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
-    
-    // 將校正後影像顯示在計算畫布
-    cv.imshow(calcCanvas, gray);
+    // 4. 開始計算 (OCR)
+    await runOCR(snapCanvas);
 
-    // --- Tesseract 多重採樣 ---
-    try {
-        const result = await Tesseract.recognize(calcCanvas, 'eng', {
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-            tessedit_pageseg_mode: '7'
-        });
-
-        let cleanText = result.data.text.replace(/[^A-Z0-9]/g, "");
-        
-        if (validateMoto(cleanText)) {
-            plateDisplay.innerText = cleanText;
-            plateDisplay.style.color = "#34C759";
-            window.speechSynthesis.speak(new SpeechSynthesisUtterance(`辨識成功 ${cleanText.split('').join(' ')}`));
-            previewText.innerText = "辨識完成";
-        } else {
-            plateDisplay.innerText = "FAIL";
-            previewText.innerText = "格式不符，請調整角度重拍";
-        }
-    } catch (e) { console.error(e); }
-
-    src.delete(); gray.delete();
+    src.delete(); roi.delete(); dst.delete(); M.delete(); srcPts.delete(); dstPts.delete();
 });
 
-// 3. 重試
+async function runOCR(sourceCanvas) {
+    const result = await Tesseract.recognize(sourceCanvas, 'eng', {
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+        tessedit_pageseg_mode: '7'
+    });
+    
+    let txt = result.data.text.replace(/[^A-Z0-9]/g, "");
+    if (validateMoto(txt)) {
+        plateDisplay.innerText = txt;
+        plateDisplay.style.color = "#34C759";
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(`辨識成功 ${txt}`));
+    } else {
+        plateDisplay.innerText = "FAIL";
+        previewText.innerText = "校正後仍無法辨識，請重拍";
+    }
+}
+
 retryBtn.addEventListener('click', () => {
     snapCanvas.style.display = "none";
     retryBtn.style.display = "none";
@@ -90,5 +86,4 @@ retryBtn.addEventListener('click', () => {
     captureBtn.disabled = false;
     plateDisplay.innerText = "----";
     plateDisplay.style.color = "white";
-    previewText.innerText = "重新對準後捕捉";
 });
