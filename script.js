@@ -219,3 +219,6 @@ retryBtn.addEventListener('click',()=>{
     plateDisplay.style.color="white";
     updateStatus(100,"重新就緒");
 });
+window.addEventListener('load', () => {
+    updateStatus(10, "載入 OpenCV 中...");
+});
