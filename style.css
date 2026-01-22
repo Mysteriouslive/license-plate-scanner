@@ -1,33 +1,37 @@
-:root { --blue: #0A84FF; --bg: #0a0a0c; }
-body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; height: 100vh; }
+:root { --blue: #0A84FF; --bg: #0a0a0c; --green: #34C759; }
+
+body { margin: 0; background: var(--bg); color: #fff; font-family: -apple-system, sans-serif; overflow: hidden; height: 100vh; }
 .app-container { display: flex; flex-direction: column; height: 100%; }
 
-header { padding-top: 50px; text-align: center; }
+header { padding-top: 50px; text-align: center; flex-shrink: 0; }
 #status { font-size: 11px; font-weight: bold; color: var(--blue); letter-spacing: 2px; }
-.progress-bar-bg { width: 120px; height: 4px; background: #222; margin: 8px auto; border-radius: 2px; overflow: hidden; }
+.progress-bar-bg { width: 140px; height: 4px; background: rgba(255,255,255,0.1); margin: 8px auto; border-radius: 2px; overflow: hidden; }
 #progress-fill { width: 0%; height: 100%; background: var(--blue); transition: 0.3s; }
 
-.scanner-section { position: relative; flex: 1; margin: 10px 20px; border-radius: 24px; overflow: hidden; background: #000; }
+.scanner-section { position: relative; flex: 1; margin: 10px 20px; border-radius: 24px; overflow: hidden; background: #000; border: 1px solid rgba(255,255,255,0.1); }
 video { width: 100%; height: 100%; object-fit: cover; }
 
-/* 定格後的畫面：完全撐滿藍色框框 */
+/* 定格後的畫布：確保它精確覆蓋在藍色框框上 */
 #snap-preview {
     display: none; position: absolute;
     top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 260px; height: 110px; /* 與 scan-frame 尺寸一致 */
+    width: 260px; height: 110px; /* 必須與 .scan-frame 尺寸一致 */
     z-index: 15; border: 2px solid var(--blue); border-radius: 4px;
+    background: #000;
 }
 
 .scan-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 10; pointer-events: none; }
-.scan-frame { width: 260px; height: 110px; position: relative; border: 1px solid rgba(255,255,255,0.1); }
+.scan-frame { width: 260px; height: 110px; position: relative; border: 1px solid rgba(255,255,255,0.2); }
 .corner { position: absolute; width: 30px; height: 30px; border: 8px solid var(--blue); }
 .top-left { top: -8px; left: -8px; border-right: 0; border-bottom: 0; }
 .top-right { top: -8px; right: -8px; border-left: 0; border-bottom: 0; }
 .bottom-left { bottom: -8px; left: -8px; border-right: 0; border-top: 0; }
 .bottom-right { bottom: -8px; right: -8px; border-left: 0; border-top: 0; }
 
-footer { padding: 30px 20px 50px; text-align: center; }
-#plate-number { font-size: 48px; font-weight: 800; letter-spacing: 6px; font-family: monospace; min-height: 60px; }
-.btn-group { display: flex; gap: 12px; margin-top: 20px; }
-button { flex: 1; padding: 18px; border-radius: 12px; border: none; background: var(--blue); color: #fff; font-weight: bold; }
-button:disabled { background: #333; color: #666; }
+footer { padding: 30px 20px 50px; text-align: center; flex-shrink: 0; }
+#plate-number { font-size: 48px; font-weight: 800; letter-spacing: 4px; font-family: monospace; min-height: 60px; margin-bottom: 10px; }
+#info { font-size: 13px; color: #888; margin-bottom: 20px; }
+
+.btn-group { display: flex; gap: 12px; }
+button { flex: 1; padding: 18px 5px; border-radius: 16px; border: none; background: var(--blue); color: #fff; font-weight: bold; font-size: 16px; }
+button:disabled { background: #333; color: #777; }
