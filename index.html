@@ -6,28 +6,28 @@
 <title>MotoScanner AI Ultra</title>
 <style>
 :root { --blue: #0A84FF; --bg: #0a0a0c; --green: #34C759; }
-body { margin: 0; background: var(--bg); color: #fff; font-family: -apple-system, sans-serif; overflow: hidden; height: 100vh; }
-.app-container { display: flex; flex-direction: column; height: 100%; }
-header { padding-top: 50px; text-align: center; flex-shrink: 0; }
-#status { font-size: 11px; font-weight: bold; color: var(--blue); letter-spacing: 2px; }
-.progress-bar-bg { width: 140px; height: 4px; background: rgba(255,255,255,0.1); margin: 8px auto; border-radius: 2px; overflow: hidden; }
-#progress-fill { width: 0%; height: 100%; background: var(--blue); transition: 0.3s; }
-.scanner-section { position: relative; flex: 1; margin: 10px 20px; border-radius: 24px; overflow: hidden; background: #000; border: 1px solid rgba(255,255,255,0.1); }
-video { width: 100%; height: 100%; object-fit: cover; }
-#snap-preview { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 260px; height: 110px; z-index: 15; border: 2px solid var(--blue); border-radius: 4px; background: #000; }
-.scan-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 10; pointer-events: none; }
-.scan-frame { width: 260px; height: 110px; position: relative; border: 1px solid rgba(255,255,255,0.2); }
-.corner { position: absolute; width: 30px; height: 30px; border: 8px solid var(--blue); }
-.top-left { top: -8px; left: -8px; border-right: 0; border-bottom: 0; }
-.top-right { top: -8px; right: -8px; border-left: 0; border-bottom: 0; }
-.bottom-left { bottom: -8px; left: -8px; border-right: 0; border-top: 0; }
-.bottom-right { bottom: -8px; right: -8px; border-left: 0; border-top: 0; }
-footer { padding: 30px 20px 50px; text-align: center; flex-shrink: 0; }
-#plate-number { font-size: 48px; font-weight: 800; letter-spacing: 4px; font-family: monospace; min-height: 60px; margin-bottom: 10px; }
-#info { font-size: 13px; color: #888; margin-bottom: 20px; }
-.btn-group { display: flex; gap: 12px; }
-button { flex: 1; padding: 18px 5px; border-radius: 16px; border: none; background: var(--blue); color: #fff; font-weight: bold; font-size: 16px; }
-button:disabled { background: #333; color: #777; }
+body { margin:0; background:var(--bg); color:#fff; font-family:-apple-system,sans-serif; overflow:hidden; height:100vh; }
+.app-container { display:flex; flex-direction:column; height:100%; }
+header { padding-top:50px; text-align:center; flex-shrink:0; }
+#status { font-size:11px; font-weight:bold; color:var(--blue); letter-spacing:2px; }
+.progress-bar-bg { width:140px; height:4px; background:rgba(255,255,255,0.1); margin:8px auto; border-radius:2px; overflow:hidden; }
+#progress-fill { width:0%; height:100%; background:var(--blue); transition:0.3s; }
+.scanner-section { position:relative; flex:1; margin:10px 20px; border-radius:24px; overflow:hidden; background:#000; border:1px solid rgba(255,255,255,0.1); }
+video { width:100%; height:100%; object-fit:cover; }
+#snap-preview { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:260px; height:110px; z-index:15; border:2px solid var(--blue); border-radius:4px; background:#000; }
+.scan-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:10; pointer-events:none; }
+.scan-frame { width:260px; height:110px; position:relative; border:1px solid rgba(255,255,255,0.2); }
+.corner { position:absolute; width:30px; height:30px; border:8px solid var(--blue); }
+.top-left { top:-8px; left:-8px; border-right:0; border-bottom:0; }
+.top-right { top:-8px; right:-8px; border-left:0; border-bottom:0; }
+.bottom-left { bottom:-8px; left:-8px; border-right:0; border-top:0; }
+.bottom-right { bottom:-8px; right:-8px; border-left:0; border-top:0; }
+footer { padding:30px 20px 50px; text-align:center; flex-shrink:0; }
+#plate-number { font-size:48px; font-weight:800; letter-spacing:4px; font-family:monospace; min-height:60px; margin-bottom:10px; }
+#info { font-size:13px; color:#888; margin-bottom:20px; }
+.btn-group { display:flex; gap:12px; }
+button { flex:1; padding:18px 5px; border-radius:16px; border:none; background:var(--blue); color:#fff; font-weight:bold; font-size:16px; }
+button:disabled { background:#333; color:#777; }
 </style>
 </head>
 <body>
@@ -59,6 +59,7 @@ button:disabled { background: #333; color: #777; }
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script async src="https://docs.opencv.org/4.x/opencv.js" onload="cvLoaded()" onerror="cvError()"></script>
 <script>
 const video = document.getElementById('video');
 const snap = document.getElementById('snap-preview');
@@ -71,51 +72,113 @@ const captureBtn = document.getElementById('captureBtn');
 const runAiBtn = document.getElementById('runAiBtn');
 const retryBtn = document.getElementById('retryBtn');
 
-let worker = null;
+let cvReady = false;
 let frameBuffer = [];
+let tesseractWorker = null;
 
-function updateStatus(p,t){ progress.style.width=p+"%"; if(t) statusText.innerText=t; }
+/* ===== 台灣機車號牌規則 ===== */
+function validateTaiwanMoto(t){ return /^[A-Z]{3}[0-9]{3,4}$/.test(t) || /^[0-9]{3}[A-Z]{3}$/.test(t); }
 function normalizePlate(t){ return t.replace(/O/g,'0').replace(/I/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8'); }
 
+/* ===== 學習矯正 ===== */
+const LEARN_KEY = 'plate_learn_map';
+function loadLearnMap(){ return JSON.parse(localStorage.getItem(LEARN_KEY)||'{}'); }
+function saveLearnMap(map){ localStorage.setItem(LEARN_KEY, JSON.stringify(map)); }
+function learnCorrection(raw,fixed){ if(raw===fixed) return; let map=loadLearnMap(); map[raw]=map[raw]||{}; map[raw][fixed]=(map[raw][fixed]||0)+1; saveLearnMap(map); }
+function applyLearnScore(text){ const map=loadLearnMap(); let bonus=0; Object.keys(map).forEach(k=>{ if(text.startsWith(k)){ const total=Object.values(map[k]).reduce((a,b)=>a+b,0); bonus+=Math.min(20,total*2); } }); return bonus; }
+
+/* ===== 狀態 ===== */
+function updateStatus(p,t){ progress.style.width=p+"%"; if(t) statusText.innerText=t; }
+function cvLoaded(){ cvReady=true; updateStatus(100,"OpenCV就緒"); if(video.srcObject) captureBtn.disabled=true; }
+function cvError(){ alert("OpenCV載入失敗"); }
+
+/* ===== Tesseract Worker ===== */
 async function initWorker(){
-    worker = Tesseract.createWorker({
-        logger: m=>{
+    tesseractWorker = Tesseract.createWorker({
+        logger:m=>{
             if(m.status==='recognizing text') updateStatus(Math.floor(m.progress*100),"辨識中...");
         }
     });
-    await worker.load();
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
-    await worker.setParameters({ tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', tessedit_pageseg_mode:'7' });
+    await tesseractWorker.load();
+    await tesseractWorker.loadLanguage('eng');
+    await tesseractWorker.initialize('eng');
+    await tesseractWorker.setParameters({ tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', tessedit_pageseg_mode:'7' });
 }
 
+/* ===== 啟動鏡頭 ===== */
 startBtn.addEventListener('click', async ()=>{
+    if(!cvReady){ alert("系統尚未就緒"); return; }
     try{
-        const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment", width:{ideal:1280}}});
+        const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment",width:{ideal:1280}}});
         video.srcObject = stream;
-        await new Promise(resolve => {
-            if(video.readyState >= 2) resolve();
-            else video.oncanplay = () => resolve();
+        await new Promise(r=>{
+            if(video.readyState>=2) r(); else video.oncanplay=r;
         });
         startBtn.style.display="none";
         captureBtn.disabled=false;
         infoText.innerText="請對準車牌後按下定格";
         updateStatus(100,"鏡頭就緒");
-    }catch(e){ alert("開啟鏡頭失敗:"+e.message); }
+    }catch(e){ alert("開啟鏡頭失敗："+e.message); }
 });
 
+/* ===== 前處理 ===== */
+function preprocessMat(src){
+    let dst = new cv.Mat();
+    // 灰階
+    cv.cvtColor(src,dst,cv.COLOR_RGBA2GRAY);
+    // 自動直方圖均衡
+    let clahe = new cv.CLAHE(2.0,new cv.Size(8,8));
+    clahe.apply(dst,dst);
+    clahe.delete();
+    // 二值化
+    cv.adaptiveThreshold(dst,dst,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C,cv.THRESH_BINARY,15,10);
+    return dst;
+}
+
+/* ===== 逐字 OCR ===== */
+async function ocrMat(mat){
+    const rects = new cv.MatVector();
+    const hierarchy = new cv.Mat();
+    cv.findContours(mat,rects,hierarchy,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE);
+    let chars = [];
+    for(let i=0;i<rects.size();i++){
+        let r = cv.boundingRect(rects.get(i));
+        if(r.height>mat.rows*0.4 && r.width>mat.cols*0.02) chars.push(r);
+        rects.get(i).delete();
+    }
+    rects.delete(); hierarchy.delete();
+    chars.sort((a,b)=>a.x-b.x);
+
+    let text = "", score = 0;
+    for(let r of chars){
+        let roi = mat.roi(r), rs = new cv.Mat();
+        cv.resize(roi,rs,new cv.Size(60,80));
+        cv.imshow(snap,rs);
+        try{
+            const res = await tesseractWorker.recognize(snap);
+            let ch = res.data.text.replace(/[^A-Z0-9]/g,'')[0]||'';
+            text += ch;
+            score += res.data.confidence||0;
+        }catch(e){}
+        roi.delete(); rs.delete();
+    }
+    return { text:normalizePlate(text), score };
+}
+
+/* ===== 連拍 ===== */
 async function captureBurst(){
-    frameBuffer = [];
+    frameBuffer=[];
     for(let i=0;i<3;i++){
         const c = document.createElement('canvas');
-        c.width = video.videoWidth;
-        c.height = video.videoHeight;
+        c.width=video.videoWidth;
+        c.height=video.videoHeight;
         c.getContext('2d').drawImage(video,0,0,c.width,c.height);
         frameBuffer.push(c);
         await new Promise(r=>setTimeout(r,120));
     }
 }
 
+/* ===== 定格 ===== */
 captureBtn.addEventListener('click', async ()=>{
     captureBtn.disabled=true;
     snap.style.display="block";
@@ -123,7 +186,6 @@ captureBtn.addEventListener('click', async ()=>{
     runAiBtn.style.display="block";
     retryBtn.style.display="block";
     await captureBurst();
-    // 將第一張顯示到 snap-preview
     const ctx = snap.getContext('2d');
     ctx.clearRect(0,0,snap.width,snap.height);
     ctx.drawImage(frameBuffer[0],0,0,snap.width,snap.height);
@@ -132,34 +194,39 @@ captureBtn.addEventListener('click', async ()=>{
     updateStatus(0,"準備辨識...");
 });
 
-async function runOCR(canvas){
-    const { data:{text,confidence} } = await worker.recognize(canvas);
-    return { text: normalizePlate(text.replace(/[^A-Z0-9]/g,'')), confidence };
-}
-
+/* ===== 辨識主流程 ===== */
 runAiBtn.addEventListener('click', async ()=>{
     runAiBtn.disabled=true;
-    let results = [];
-    for(let c of frameBuffer){
-        let res = await runOCR(c);
-        if(res.text.length>=5 && res.text.length<=7) results.push(res);
+    const results = [];
+    for(const c of frameBuffer){
+        let src = cv.imread(c);
+        let pre = preprocessMat(src);
+        let ocrRes = await ocrMat(pre);
+        if(validateTaiwanMoto(ocrRes.text)){
+            let bonus = applyLearnScore(ocrRes.text);
+            results.push({text:ocrRes.text, score:ocrRes.score+bonus});
+        }
+        pre.delete(); src.delete();
     }
-    if(results.length===0){
+    results.sort((a,b)=>b.score-a.score);
+    const best = results[0];
+    if(best){
+        plateDisplay.innerText=best.text;
+        plateDisplay.style.color="#34C759";
+        updateStatus(100,"辨識成功");
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(`號碼 ${best.text.split('').join(' ')}`));
+        results.forEach(r=>{ if(r.text!==best.text) learnCorrection(r.text,best.text); });
+    }else{
         plateDisplay.innerText="----";
         plateDisplay.style.color="#ff453a";
         updateStatus(100,"辨識失敗");
-    }else{
-        results.sort((a,b)=>b.confidence-a.confidence);
-        plateDisplay.innerText = results[0].text;
-        plateDisplay.style.color="#34C759";
-        updateStatus(100,"辨識成功");
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(`號碼 ${results[0].text.split('').join(' ')}`));
     }
     runAiBtn.style.display="none";
     runAiBtn.disabled=false;
 });
 
-retryBtn.addEventListener('click', ()=>{
+/* ===== 重拍 ===== */
+retryBtn.addEventListener('click',()=>{
     frameBuffer=[];
     snap.style.display="none";
     retryBtn.style.display="none";
@@ -172,8 +239,9 @@ retryBtn.addEventListener('click', ()=>{
     updateStatus(100,"重新就緒");
 });
 
+/* ===== 初始化 ===== */
 window.addEventListener('load', async ()=>{
-    updateStatus(10,"載入系統...");
+    updateStatus(10,"載入 OpenCV...");
     await initWorker();
     updateStatus(100,"系統就緒");
 });
