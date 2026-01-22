@@ -1,19 +1,20 @@
 :root {
-    --bg-base: #0a0a0c;
-    --accent-blue: #0A84FF;
-    --text-main: #f2f2f7;
-    --text-dim: #8e8e93;
+    --bg: #0a0a0c;
+    --accent: #0A84FF;
+    --green: #34C759;
+    --text: #f2f2f7;
 }
 
+/* 鎖定全螢幕不產生捲動 */
 html, body {
     margin: 0; padding: 0; width: 100%; height: 100%;
-    overflow: hidden; background: var(--bg-base);
-    color: var(--text-main); font-family: -apple-system, sans-serif;
+    overflow: hidden; background: var(--bg);
+    color: var(--text); font-family: -apple-system, sans-serif;
     touch-action: none;
 }
 
 .app-container {
-    display: flex; flex-direction: column; height: 100vh; width: 100vw;
+    display: flex; flex-direction: column; height: 100vh;
 }
 
 header {
@@ -23,14 +24,18 @@ header {
 
 #status {
     font-size: 11px; letter-spacing: 2px;
-    color: var(--accent-blue); font-weight: 700;
+    color: var(--accent); font-weight: 700; text-transform: uppercase;
 }
 
+/* 鏡頭畫面高度縮減 */
 .scanner-section {
-    position: relative; flex: 1;
-    margin: 0 20px; border-radius: 20px;
-    overflow: hidden; background: #000;
-    border: 1px solid rgba(255,255,255,0.1);
+    position: relative;
+    height: 38vh; /* 鏡頭高度約佔螢幕 1/3 */
+    margin: 0 20px;
+    border-radius: 24px;
+    overflow: hidden;
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 video { width: 100%; height: 100%; object-fit: cover; }
@@ -38,55 +43,44 @@ video { width: 100%; height: 100%; object-fit: cover; }
 .scan-overlay {
     position: absolute; inset: 0;
     display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.3);
+    align-items: center;
+    padding-top: 15%; /* 框框相對於鏡頭畫面上移 */
 }
 
+/* 框框與 8px 粗線條 */
 .scan-frame {
-    width: 260px; height: 110px;
+    width: 250px; height: 100px;
     position: relative; border: 1px solid rgba(255, 255, 255, 0.2);
-    overflow: hidden; /* 讓掃描線不超出 */
+    transition: all 0.3s;
 }
 
-/* 掃描雷射線動畫 */
-.scan-line {
-    position: absolute; width: 100%; height: 3px;
-    background: var(--accent-blue);
-    box-shadow: 0 0 15px var(--accent-blue);
-    top: 0; animation: scanMove 2s infinite ease-in-out;
-}
-
-@keyframes scanMove {
-    0% { top: 0%; } 50% { top: 100%; } 100% { top: 0%; }
-}
-
-.corner {
-    position: absolute; width: 30px; height: 30px;
-    border: 8px solid var(--accent-blue);
-    z-index: 5;
-}
+.corner { position: absolute; width: 30px; height: 30px; border: 8px solid var(--accent); }
 .top-left { top: -8px; left: -8px; border-right: 0; border-bottom: 0; }
 .top-right { top: -8px; right: -8px; border-left: 0; border-bottom: 0; }
 .bottom-left { bottom: -8px; left: -8px; border-right: 0; border-top: 0; }
 .bottom-right { bottom: -8px; right: -8px; border-left: 0; border-top: 0; }
 
-#live-preview { margin-top: 15px; font-size: 12px; color: var(--text-dim); }
+#live-preview { margin-top: 20px; font-size: 13px; color: #8e8e93; }
 
+/* 底部結果區 */
 footer {
-    padding: 20px 25px calc(env(safe-area-inset-bottom, 20px) + 20px);
+    padding: 40px 30px calc(env(safe-area-inset-bottom, 20px) + 20px);
     text-align: center;
 }
 
 #plate-number {
-    font-size: 48px; font-weight: 800; letter-spacing: 6px;
-    margin-bottom: 25px; min-height: 58px;
-    font-family: 'Courier New', monospace;
+    font-size: 50px; font-weight: 800;
+    letter-spacing: 8px; margin-bottom: 30px;
+    min-height: 60px; font-family: 'Courier New', monospace;
 }
 
 button {
-    width: 100%; padding: 18px; border-radius: 16px;
-    border: none; font-size: 16px; font-weight: bold;
-    background: var(--accent-blue); color: white; cursor: pointer;
+    width: 100%; padding: 18px; border-radius: 16px; border: none;
+    background: var(--accent); color: white;
+    font-size: 18px; font-weight: bold; cursor: pointer;
+    box-shadow: 0 4px 15px rgba(10, 132, 255, 0.3);
 }
 
-#confirmBtn { background: #34C759; display: none; }
+/* 成功時的動畫狀態 */
+.success-mode { border-color: var(--green) !important; }
+.success-mode .corner { border-color: var(--green) !important; }
