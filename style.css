@@ -10,13 +10,12 @@ header { padding-top: 50px; text-align: center; }
 .scanner-section { position: relative; flex: 1; margin: 10px 20px; border-radius: 24px; overflow: hidden; background: #000; }
 video { width: 100%; height: 100%; object-fit: cover; }
 
-/* 定格後的畫布：完全重合藍色框框 */
+/* 定格後的畫面：完全撐滿藍色框框 */
 #snap-preview {
     display: none; position: absolute;
     top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 260px; height: 110px; /* 必須與 scan-frame 一致 */
+    width: 260px; height: 110px; /* 與 scan-frame 尺寸一致 */
     z-index: 15; border: 2px solid var(--blue); border-radius: 4px;
-    background: #000;
 }
 
 .scan-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 10; pointer-events: none; }
