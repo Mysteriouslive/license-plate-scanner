@@ -59,7 +59,6 @@ button:disabled { background: #333; color: #777; }
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script async src="https://docs.opencv.org/4.7.0/opencv.js"></script>
 <script>
 const video = document.getElementById('video');
 const snap = document.getElementById('snap-preview');
@@ -72,24 +71,11 @@ const captureBtn = document.getElementById('captureBtn');
 const runAiBtn = document.getElementById('runAiBtn');
 const retryBtn = document.getElementById('retryBtn');
 
-let cvReady = false;
 let worker = null;
 let frameBuffer = [];
 
 function updateStatus(p,t){ progress.style.width=p+"%"; if(t) statusText.innerText=t; }
-
-function waitForCv(){
-    return new Promise(resolve=>{
-        let check=setInterval(()=>{
-            if(cv && cv.Mat){
-                clearInterval(check);
-                cvReady=true;
-                updateStatus(100,"系統就緒");
-                resolve();
-            }
-        },200);
-    });
-}
+function normalizePlate(t){ return t.replace(/O/g,'0').replace(/I/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8'); }
 
 async function initWorker(){
     worker = Tesseract.createWorker({
@@ -103,27 +89,27 @@ async function initWorker(){
     await worker.setParameters({ tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', tessedit_pageseg_mode:'7' });
 }
 
-function normalizePlate(t){
-    return t.replace(/O/g,'0').replace(/I/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8');
-}
-
 startBtn.addEventListener('click', async ()=>{
-    if(!cvReady){ alert("系統尚未初始化完成"); return; }
     try{
         const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment", width:{ideal:1280}}});
         video.srcObject = stream;
+        await new Promise(resolve => {
+            if(video.readyState >= 2) resolve();
+            else video.oncanplay = () => resolve();
+        });
         startBtn.style.display="none";
         captureBtn.disabled=false;
         infoText.innerText="請對準車牌後按下定格";
+        updateStatus(100,"鏡頭就緒");
     }catch(e){ alert("開啟鏡頭失敗:"+e.message); }
 });
 
 async function captureBurst(){
-    frameBuffer=[];
+    frameBuffer = [];
     for(let i=0;i<3;i++){
-        let c = document.createElement('canvas');
-        c.width = video.videoWidth || 640;
-        c.height = video.videoHeight || 360;
+        const c = document.createElement('canvas');
+        c.width = video.videoWidth;
+        c.height = video.videoHeight;
         c.getContext('2d').drawImage(video,0,0,c.width,c.height);
         frameBuffer.push(c);
         await new Promise(r=>setTimeout(r,120));
@@ -137,9 +123,13 @@ captureBtn.addEventListener('click', async ()=>{
     runAiBtn.style.display="block";
     retryBtn.style.display="block";
     await captureBurst();
-    updateStatus(0,"準備辨識...");
+    // 將第一張顯示到 snap-preview
+    const ctx = snap.getContext('2d');
+    ctx.clearRect(0,0,snap.width,snap.height);
+    ctx.drawImage(frameBuffer[0],0,0,snap.width,snap.height);
     plateDisplay.innerText="----";
     plateDisplay.style.color="white";
+    updateStatus(0,"準備辨識...");
 });
 
 async function runOCR(canvas){
@@ -184,8 +174,8 @@ retryBtn.addEventListener('click', ()=>{
 
 window.addEventListener('load', async ()=>{
     updateStatus(10,"載入系統...");
-    await waitForCv();
     await initWorker();
+    updateStatus(100,"系統就緒");
 });
 </script>
 </body>
