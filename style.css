@@ -1,46 +1,15 @@
-:root { --accent: #0A84FF; --bg: #0a0a0c; --green: #34C759; }
-
-html, body {
-    margin: 0; padding: 0; height: 100%; overflow: hidden;
-    background: var(--bg); color: white; font-family: -apple-system, sans-serif;
-    touch-action: none;
+/* 定格預覽層：現在它會精確覆蓋在藍色框框的位置 */
+#snap-preview {
+    display: none;
+    position: absolute;
+    /* 必須與 .scan-frame 的位置尺寸一致 */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* 置中 */
+    width: 260px;  /* 與 .scan-frame 寬度一致 */
+    height: 110px; /* 與 .scan-frame 高度一致 */
+    z-index: 15;   /* 高於 video 但低於邊角框 */
+    border-radius: 4px;
+    object-fit: fill; /* 強制填滿框框 */
+    border: 2px solid var(--accent);
 }
-
-.app-container { display: flex; flex-direction: column; height: 100vh; }
-
-header { padding: 50px 20px 10px; text-align: center; }
-#status { font-size: 11px; color: var(--accent); font-weight: bold; letter-spacing: 2px; margin-bottom: 10px; }
-
-#startBtn {
-    background: rgba(255,255,255,0.1); border: 1px solid var(--accent);
-    color: var(--accent); padding: 8px 20px; border-radius: 20px; font-size: 13px;
-}
-
-.scanner-section {
-    position: relative; flex: 1; margin: 10px 20px;
-    border-radius: 24px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);
-}
-
-video { width: 100%; height: 100%; object-fit: cover; }
-
-.scan-overlay {
-    position: absolute; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; z-index: 10;
-}
-
-.scan-frame { width: 260px; height: 110px; position: relative; border: 1px solid rgba(255,255,255,0.2); }
-.corner { position: absolute; width: 30px; height: 30px; border: 8px solid var(--accent); }
-.top-left { top: -8px; left: -8px; border-right: 0; border-bottom: 0; }
-.top-right { top: -8px; right: -8px; border-left: 0; border-bottom: 0; }
-.bottom-left { bottom: -8px; left: -8px; border-right: 0; border-top: 0; }
-.bottom-right { bottom: -8px; right: -8px; border-left: 0; border-top: 0; }
-
-footer { padding: 30px 25px 50px; text-align: center; }
-#plate-number { font-size: 52px; font-weight: 800; letter-spacing: 6px; font-family: monospace; min-height: 60px; margin-bottom: 10px; }
-#live-preview { font-size: 13px; color: #888; margin-bottom: 25px; }
-
-button {
-    width: 100%; padding: 18px; border-radius: 16px; border: none;
-    background: var(--accent); color: white; font-size: 17px; font-weight: bold; transition: 0.2s;
-}
-button:active { transform: scale(0.98); opacity: 0.9; }
