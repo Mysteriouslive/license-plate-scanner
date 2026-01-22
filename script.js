@@ -1,3 +1,4 @@
+/* ================= DOM ================= */
 const video = document.getElementById('video');
 const snap = document.getElementById('snap-preview');
 const progress = document.getElementById('progress-fill');
@@ -10,124 +11,174 @@ const runAiBtn = document.getElementById('runAiBtn');
 const retryBtn = document.getElementById('retryBtn');
 
 let cvReady = false;
+let frameBuffer = [];
 
-// --- 0. 載入與規則設定 ---
+/* ================= 台灣機車規則 ================= */
+const validateTaiwanMoto = t =>
+    /^[A-Z]{3}[0-9]{3,4}$/.test(t) || /^[0-9]{3}[A-Z]{3}$/.test(t);
 
-// 台灣機車車牌規則驗證
-const validateTaiwanMoto = (t) => {
-    const rules = [
-        /^[A-Z]{3}[0-9]{3,4}$/, // 新式 (ABC-1234)
-        /^[0-9]{3}[A-Z]{3}$/    // 舊式 (123-ABC)
-    ];
-    return rules.some(r => r.test(t));
-};
+const normalizePlate = t =>
+    t.replace(/O/g,'0').replace(/I/g,'1').replace(/Z/g,'2')
+     .replace(/S/g,'5').replace(/B/g,'8');
 
-function onCvReady() {
+/* ================= 狀態 ================= */
+function cvLoaded() {
     cvReady = true;
     updateStatus(100, "系統就緒");
     if (video.srcObject) captureBtn.disabled = false;
 }
-function onCvError() { updateStatus(0, "引擎載入失敗"); }
-
-function updateStatus(per, txt) {
-    progress.style.width = per + "%";
-    if (txt) statusText.innerText = txt;
+function updateStatus(p, t) {
+    progress.style.width = p + "%";
+    if (t) statusText.innerText = t;
 }
 
-// --- 1. 啟動鏡頭 ---
+/* ================= 啟動鏡頭 ================= */
 startBtn.addEventListener('click', async () => {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment", width: { ideal: 1280 } } 
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment", width: { ideal: 1280 } }
         });
         video.srcObject = stream;
         startBtn.style.display = "none";
-        // 只有當 OpenCV 準備好且鏡頭開啟，才解鎖截圖鍵
         if (cvReady) captureBtn.disabled = false;
         infoText.innerText = "請對準車牌後按下定格";
-    } catch (e) { alert("無法啟動相機，請檢查 HTTPS 或權限"); }
+    } catch {
+        alert("鏡頭啟動失敗，請確認 HTTPS");
+    }
 });
 
-// --- 2. 截圖定格 (原生 Canvas) ---
-// 不使用 OpenCV，確保手機不會卡死，並自動撐滿框框
-captureBtn.addEventListener('click', () => {
-    const ctx = snap.getContext('2d');
-    
-    // 計算藍框在影片中的相對位置
-    const sw = video.videoWidth * 0.6;
-    const sh = video.videoHeight * 0.3;
-    const sx = (video.videoWidth - sw) / 2;
-    const sy = (video.videoHeight - sh) / 2.5;
+/* ================= 連拍 ================= */
+async function captureBurst() {
+    frameBuffer = [];
+    for (let i = 0; i < 3; i++) {
+        const c = document.createElement('canvas');
+        c.width = 600; c.height = 300;
+        c.getContext('2d').drawImage(video, 0, 0, 600, 300);
+        frameBuffer.push(c);
+        await new Promise(r => setTimeout(r, 120));
+    }
+}
 
-    // 設定畫布為標準 600x300 (自動密合)
-    snap.width = 600;
-    snap.height = 300;
-    
-    // 執行繪製
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 600, 300);
-    
-    // UI 切換
+/* ================= 車牌候選框偵測 ================= */
+function detectPlateCandidates(src) {
+    let gray = new cv.Mat(), blur = new cv.Mat(), edge = new cv.Mat();
+    let contours = new cv.MatVector(), hierarchy = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    cv.GaussianBlur(gray, blur, new cv.Size(5,5), 0);
+    cv.Canny(blur, edge, 100, 200);
+    cv.findContours(edge, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+    const plates = [];
+    const imgArea = src.cols * src.rows;
+
+    for (let i = 0; i < contours.size(); i++) {
+        const rect = cv.boundingRect(contours.get(i));
+        const ratio = rect.width / rect.height;
+        const area = rect.width * rect.height;
+
+        if (ratio > 2.2 && ratio < 4.2 && area > imgArea*0.05 && area < imgArea*0.4) {
+            plates.push(rect);
+        }
+        contours.get(i).delete();
+    }
+    gray.delete(); blur.delete(); edge.delete();
+    contours.delete(); hierarchy.delete();
+    return plates;
+}
+
+/* ================= 影像強化 ================= */
+function sharpen(mat) {
+    const k = cv.matFromArray(3,3,cv.CV_32F,[0,-1,0,-1,5,-1,0,-1,0]);
+    cv.filter2D(mat, mat, cv.CV_8U, k);
+    k.delete();
+}
+
+/* ================= 評分 ================= */
+function scoreResult(text, conf=0) {
+    let s = conf;
+    if (validateTaiwanMoto(text)) s += 40;
+    if (/^[A-Z]{3}/.test(text)) s += 10;
+    if (/[0-9]{3,4}$/.test(text)) s += 10;
+    return s;
+}
+
+/* ================= 定格 ================= */
+captureBtn.addEventListener('click', async () => {
+    await captureBurst();
     snap.style.display = "block";
     captureBtn.style.display = "none";
     runAiBtn.style.display = "block";
     retryBtn.style.display = "block";
-    infoText.innerText = "已定格，確認清晰後辨識";
+    updateStatus(10, "已定格");
 });
 
-// --- 3. 影像處理與辨識 ---
+/* ================= 辨識主流程 ================= */
 runAiBtn.addEventListener('click', async () => {
     runAiBtn.disabled = true;
-    updateStatus(20, "執行水平校正與黑化...");
+    updateStatus(20, "辨識中...");
 
-    let src = cv.imread(snap);
-    let dst = new cv.Mat();
-    
-    // A. 水平平面化 (透視變換)
-    // 強制將歪斜的圖片拉成正長方形
-    let srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, 600, 0, 600, 300, 0, 300]);
-    let dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, 600, 0, 600, 300, 0, 300]);
-    let M = cv.getPerspectiveTransform(srcPts, dstPts);
-    cv.warpPerspective(src, dst, M, new cv.Size(600, 300));
+    const results = [];
 
-    // B. 自適應二值化 (黑白強化)
-    // 參數 17, 13 是針對車牌調教過的，能讓字體變黑加粗
-    cv.cvtColor(dst, dst, cv.COLOR_RGBA2GRAY);
-    cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 17, 13);
-    
-    // 顯示處理後的黑白圖
-    cv.imshow(snap, dst);
+    for (const frame of frameBuffer) {
+        let src = cv.imread(frame);
+        const rects = detectPlateCandidates(src);
 
-    updateStatus(50, "AI 讀取中...");
-    try {
-        const result = await Tesseract.recognize(snap, 'eng', {
-            logger: m => { if(m.status === 'recognizing text') updateStatus(50 + (m.progress * 50), "分析中..."); },
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-            tessedit_pageseg_mode: '7' // 單行文字模式
-        });
+        for (const r of rects) {
+            let roi = src.roi(r);
+            let gray = new cv.Mat();
 
-        let txt = result.data.text.replace(/[^A-Z0-9]/g, "");
-        
-        // 規則驗證
-        if (validateTaiwanMoto(txt)) {
-            plateDisplay.innerText = txt;
-            plateDisplay.style.color = "#34C759";
-            updateStatus(100, "辨識成功");
-            window.speechSynthesis.speak(new SpeechSynthesisUtterance(`號碼 ${txt.split('').join(' ')}`));
-        } else {
-            plateDisplay.innerText = txt || "FAIL";
-            plateDisplay.style.color = "orange";
-            infoText.innerText = "格式不符，請重試";
-            updateStatus(100, "辨識結束 (格式不符)");
+            cv.cvtColor(roi, gray, cv.COLOR_RGBA2GRAY);
+            cv.adaptiveThreshold(
+                gray, gray, 255,
+                cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv.THRESH_BINARY, 17, 13
+            );
+            sharpen(gray);
+            cv.imshow(snap, gray);
+
+            try {
+                const res = await Tesseract.recognize(snap, 'eng', {
+                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+                    tessedit_pageseg_mode: '7'
+                });
+                const txt = normalizePlate(
+                    res.data.text.replace(/[^A-Z0-9]/g,'')
+                );
+                if (txt.length >= 6) {
+                    results.push({
+                        text: txt,
+                        score: scoreResult(txt, res.data.confidence)
+                    });
+                }
+            } catch {}
+
+            roi.delete(); gray.delete();
         }
-    } catch (e) { console.error(e); }
+        src.delete();
+    }
 
-    // 釋放記憶體
-    src.delete(); dst.delete(); M.delete(); srcPts.delete(); dstPts.delete();
+    results.sort((a,b)=>b.score-a.score);
+    const best = results.find(r=>validateTaiwanMoto(r.text));
+
+    if (best) {
+        plateDisplay.innerText = best.text;
+        plateDisplay.style.color = "#34C759";
+        updateStatus(100, "辨識成功");
+        window.speechSynthesis.speak(
+            new SpeechSynthesisUtterance(`號碼 ${best.text.split('').join(' ')}`)
+        );
+    } else {
+        plateDisplay.innerText = "----";
+        plateDisplay.style.color = "orange";
+        updateStatus(100, "辨識失敗");
+    }
+
     runAiBtn.style.display = "none";
 });
 
-// --- 4. 重試機制 ---
+/* ================= 重拍 ================= */
 retryBtn.addEventListener('click', () => {
+    frameBuffer = [];
     snap.style.display = "none";
     retryBtn.style.display = "none";
     runAiBtn.style.display = "none";
@@ -135,5 +186,5 @@ retryBtn.addEventListener('click', () => {
     captureBtn.style.display = "block";
     plateDisplay.innerText = "----";
     plateDisplay.style.color = "white";
-    updateStatus(100, "系統就緒");
+    updateStatus(100, "重新就緒");
 });
