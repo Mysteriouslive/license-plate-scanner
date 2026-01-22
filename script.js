@@ -2,8 +2,8 @@ const progressBar = document.getElementById('progress-bar');
 const statusText = document.getElementById('status');
 const video = document.getElementById('video');
 const snapCanvas = document.getElementById('snap-preview');
+const calcCanvas = document.getElementById('calc-canvas');
 const plateDisplay = document.getElementById('plate-number');
-const previewText = document.getElementById('live-preview');
 const startBtn = document.getElementById('startBtn');
 const captureBtn = document.getElementById('captureBtn');
 const runAiBtn = document.getElementById('runAiBtn');
@@ -11,16 +11,16 @@ const retryBtn = document.getElementById('retryBtn');
 
 let cvReady = false;
 
-// 1. 進度條更新與 OpenCV 監控
+// 1. 監控 OpenCV 載入
+function onCvLoaded() {
+    cvReady = true;
+    updateProgress(100, "系統就緒");
+    if(video.srcObject) captureBtn.disabled = false;
+}
+
 function updateProgress(per, text) {
     progressBar.style.width = per + "%";
     if (text) statusText.innerText = text;
-}
-
-function cvLoaded() {
-    cvReady = true;
-    updateProgress(100, "引擎就緒");
-    if(video.srcObject) captureBtn.disabled = false;
 }
 
 // 2. 啟動鏡頭
@@ -31,53 +31,62 @@ startBtn.addEventListener('click', async () => {
         });
         video.srcObject = stream;
         startBtn.style.display = "none";
+        // 鏡頭啟動後，若 CV 也好了就開啟捕捉
         if(cvReady) captureBtn.disabled = false;
-        previewText.innerText = "請對準車牌後按下截圖";
+        statusText.innerText = "相機已啟動";
     } catch (err) { alert("無法開啟相機，請檢查 HTTPS 設定"); }
 });
 
-// 3. 截圖並水平校正密合
+// 3. 高可靠性「截圖定格」：使用 Canvas2D 繪圖
 captureBtn.addEventListener('click', () => {
-    if (!cvReady) return;
+    const sCtx = snapCanvas.getContext('2d');
     
-    // 計算裁切座標 (對準 UI 藍框位置)
+    // 計算視訊裁切區域 (對齊藍框位置)
     const sx = video.videoWidth * 0.2, sy = video.videoHeight * 0.3;
     const sw = video.videoWidth * 0.6, sh = video.videoHeight * 0.4;
 
-    let src = cv.imread(video);
-    let roi = src.roi(new cv.Rect(sx, sy, sw, sh));
-    let dst = new cv.Mat();
+    snapCanvas.width = 600;
+    snapCanvas.height = 300;
     
-    // 透視校正：強行拉平並密合至 600x300
-    let srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, sw, 0, sw, sh, 0, sh]);
-    let dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, 600, 0, 600, 300, 0, 300]);
-    let M = cv.getPerspectiveTransform(srcPts, dstPts);
-    cv.warpPerspective(roi, dst, M, new cv.Size(600, 300), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
-
-    // 影像強化：黑白二值化解決 9/3 誤認
-    cv.cvtColor(dst, dst, cv.COLOR_RGBA2GRAY);
-    cv.threshold(dst, dst, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
-
-    cv.imshow(snapCanvas, dst);
+    // 直接用 2D context 繪製，成功率最高
+    sCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 600, 300);
+    
     snapCanvas.style.display = "block";
     captureBtn.style.display = "none";
     runAiBtn.style.display = "block";
     retryBtn.style.display = "block";
-
-    // 釋放記憶體避免手機閃退
-    src.delete(); roi.delete(); dst.delete(); M.delete(); srcPts.delete(); dstPts.delete();
+    statusText.innerText = "定格成功，請確認清晰度";
 });
 
-// 4. 辨識與進度追蹤
+// 4. 按下確認後才執行 OpenCV 校正與 Tesseract 辨識
 runAiBtn.addEventListener('click', async () => {
     runAiBtn.disabled = true;
-    updateProgress(0, "正在分析...");
+    updateProgress(10, "正在執行水平校正...");
+
+    // 使用 OpenCV 進行角度校正與二值化 (解決 9/3 問題)
+    let src = cv.imread(snapCanvas);
+    let dst = new cv.Mat();
+    
+    // 透視變換模擬水平拉直
+    let srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, 600, 0, 600, 300, 0, 300]);
+    let dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, 600, 0, 600, 300, 0, 300]);
+    let M = cv.getPerspectiveTransform(srcPts, dstPts);
+    cv.warpPerspective(src, dst, M, new cv.Size(600, 300));
+
+    // 強度二值化
+    cv.cvtColor(dst, dst, cv.COLOR_RGBA2GRAY);
+    cv.threshold(dst, dst, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
+    
+    // 寫回畫布供辨識
+    cv.imshow(snapCanvas, dst);
+
+    updateProgress(40, "辨識文字中...");
 
     try {
         const result = await Tesseract.recognize(snapCanvas, 'eng', {
             logger: m => {
                 if (m.status === 'recognizing text') {
-                    updateProgress(Math.round(m.progress * 100), `辨識中: ${Math.round(m.progress * 100)}%`);
+                    updateProgress(40 + Math.round(m.progress * 60), `進度: ${Math.round(m.progress * 100)}%`);
                 }
             },
             tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
@@ -86,10 +95,12 @@ runAiBtn.addEventListener('click', async () => {
 
         let txt = result.data.text.replace(/[^A-Z0-9]/g, "");
         plateDisplay.innerText = txt || "FAIL";
-        plateDisplay.style.color = txt ? "#34C759" : "#FF3B30";
-        updateProgress(100, txt ? "辨識成功" : "辨識失敗");
-        if(txt) window.speechSynthesis.speak(new SpeechSynthesisUtterance(`辨識結果 ${txt}`));
-    } catch (e) { updateProgress(0, "出錯了"); }
+        plateDisplay.style.color = txt ? "#34C759" : "red";
+        
+        if(txt) window.speechSynthesis.speak(new SpeechSynthesisUtterance(`辨識成功 ${txt}`));
+    } catch (e) { console.error(e); }
+
+    src.delete(); dst.delete(); M.delete(); srcPts.delete(); dstPts.delete();
     runAiBtn.style.display = "none";
 });
 
