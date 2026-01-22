@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>MotoScanner AI Pro</title>
+    <title>MotoScanner AI Ultra</title>
     <link rel="stylesheet" href="style.css">
-    <script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="onCvReady();"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="cvLoaded();" onerror="cvError();"></script>
 </head>
 <body>
     <div class="app-container">
         <header>
-            <div id="status">正在下載 AI 引擎...</div>
-            <div class="progress-container"><div id="progress-bar"></div></div>
+            <div id="status">正在載入 AI 核心 (10MB)...</div>
+            <div class="progress-bar-bg"><div id="progress-fill"></div></div>
         </header>
 
         <main class="scanner-section">
@@ -38,6 +38,7 @@
             </div>
         </footer>
     </div>
+    <canvas id="buffer-canvas" style="display:none;"></canvas>
     <script src="script.js"></script>
 </body>
 </html>
