@@ -6,18 +6,31 @@
     --text-dim: #8e8e93;
 }
 
-body {
+/* 鎖定全螢幕，防止上下捲動與手勢縮放 */
+html, body {
     margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
     background: var(--bg-base);
     color: var(--text-main);
     font-family: -apple-system, sans-serif;
-    height: 100vh;
-    overflow: hidden;
+    touch-action: none; /* 禁用手勢下拉重新整理 */
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh; /* 強制高度等於視窗高度 */
+    width: 100vw;
 }
 
 header {
-    padding: 40px 20px 10px;
+    padding-top: env(safe-area-inset-top, 40px); /* 適應瀏海屏 */
+    padding-bottom: 10px;
     text-align: center;
+    flex-shrink: 0;
 }
 
 #status {
@@ -27,11 +40,11 @@ header {
     font-weight: 700;
 }
 
-/* 鏡頭畫面高度縮小 */
+/* 鏡頭區：佔據螢幕剩餘空間的一部分 */
 .scanner-section {
     position: relative;
-    height: 35vh; /* 鏡頭只佔螢幕 35% */
-    margin: 10px 20px;
+    flex: 1; /* 自動調整高度填滿中間 */
+    margin: 0 20px;
     border-radius: 20px;
     overflow: hidden;
     background: #000;
@@ -54,15 +67,13 @@ video {
     background: rgba(0,0,0,0.2);
 }
 
-/* 框框樣式 */
+/* 框框樣式：加粗 8px */
 .scan-frame {
-    width: 240px;
-    height: 100px;
+    width: 260px;
+    height: 110px;
     position: relative;
-    border: 1px solid rgba(255,255,255,0.2);
 }
 
-/* 粗框線條 8px */
 .corner {
     position: absolute;
     width: 30px;
@@ -80,21 +91,27 @@ video {
     color: var(--text-dim);
 }
 
+/* 底部區：固定在下方 */
 footer {
-    padding: 30px 25px;
+    padding: 20px 25px calc(env(safe-area-inset-bottom, 20px) + 20px);
     text-align: center;
+    flex-shrink: 0;
 }
 
 #plate-number {
     font-size: 44px;
     font-weight: 200;
     letter-spacing: 6px;
-    margin-bottom: 30px;
+    margin-bottom: 20px;
     min-height: 52px;
     font-family: 'Courier New', monospace;
 }
 
-.btn-group { display: flex; flex-direction: column; gap: 15px; }
+.btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
 
 button {
     width: 100%;
@@ -104,11 +121,11 @@ button {
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
+    background: var(--accent-blue);
+    color: white;
 }
 
-#startBtn { background: var(--accent-blue); color: white; }
-#confirmBtn { 
-    background: #34C759; 
-    color: white; 
-    display: none; /* 偵測到號碼才顯示 */
+#confirmBtn {
+    background: #34C759;
+    display: none;
 }
