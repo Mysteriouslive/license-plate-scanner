@@ -6,19 +6,18 @@
     <title>MotoScanner AI Ultra</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="onCvLoaded();" onerror="onCvError();"></script>
+    <script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="onCvReady();"></script>
 </head>
 <body>
     <div class="app-container">
         <header>
-            <div id="status">正在下載 AI 引擎 (10MB)...</div>
+            <div id="status">AI 引擎下載中...</div>
             <div class="progress-container"><div id="progress-bar"></div></div>
         </header>
 
         <main class="scanner-section">
             <video id="video" autoplay playsinline muted></video>
             <canvas id="snap-preview"></canvas>
-            
             <div class="scan-overlay">
                 <div class="scan-frame">
                     <div class="corner top-left"></div><div class="corner top-right"></div>
