@@ -2,37 +2,87 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0,
+               maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>MotoScanner AI Ultra</title>
 
-<link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="https://docs.opencv.org/4.x/opencv.js" onload="cvLoaded()"></script>
+<script src="https://docs.opencv.org/4.x/opencv.js"></script>
 
 <style>
-/* === 原 UI 完整保留 === */
 :root { --blue:#0A84FF; --bg:#0a0a0c; --green:#34C759; }
-body { margin:0; background:var(--bg); color:#fff; font-family:-apple-system,sans-serif; overflow:hidden; height:100vh; }
+body { margin:0; background:var(--bg); color:#fff;
+       font-family:-apple-system,sans-serif;
+       overflow:hidden; height:100vh; }
 .app-container { display:flex; flex-direction:column; height:100%; }
+
 header { padding-top:50px; text-align:center; }
-#status { font-size:11px; font-weight:bold; color:var(--blue); letter-spacing:2px; }
-.progress-bar-bg { width:140px; height:4px; background:rgba(255,255,255,.1); margin:8px auto; border-radius:2px; overflow:hidden; }
-#progress-fill { height:100%; width:0%; background:var(--blue); transition:.3s; }
-.scanner-section { position:relative; flex:1; margin:10px 20px; border-radius:24px; overflow:hidden; background:#000; border:1px solid rgba(255,255,255,.1); }
+#status { font-size:11px; font-weight:bold;
+          color:var(--blue); letter-spacing:2px; }
+.progress-bar-bg {
+    width:140px; height:4px;
+    background:rgba(255,255,255,.1);
+    margin:8px auto; border-radius:2px; overflow:hidden;
+}
+#progress-fill {
+    height:100%; width:0%;
+    background:var(--blue); transition:.3s;
+}
+
+.scanner-section {
+    position:relative; flex:1; margin:10px 20px;
+    border-radius:24px; overflow:hidden;
+    background:#000;
+    border:1px solid rgba(255,255,255,.1);
+}
 video { width:100%; height:100%; object-fit:cover; }
-#snap-preview { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:260px; height:110px; border:2px solid var(--blue); z-index:15; }
-.scan-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-.scan-frame { width:260px; height:110px; border:1px solid rgba(255,255,255,.2); position:relative; }
-.corner { position:absolute; width:30px; height:30px; border:8px solid var(--blue); }
+
+#snap-preview {
+    display:none; position:absolute;
+    top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:260px; height:110px;
+    border:2px solid var(--blue);
+    z-index:15;
+}
+
+.scan-overlay {
+    position:absolute; inset:0;
+    display:flex; align-items:center;
+    justify-content:center;
+    pointer-events:none;
+}
+.scan-frame {
+    width:260px; height:110px;
+    border:1px solid rgba(255,255,255,.2);
+    position:relative;
+}
+.corner {
+    position:absolute; width:30px; height:30px;
+    border:8px solid var(--blue);
+}
 .top-left { top:-8px; left:-8px; border-right:0; border-bottom:0; }
 .top-right { top:-8px; right:-8px; border-left:0; border-bottom:0; }
 .bottom-left { bottom:-8px; left:-8px; border-right:0; border-top:0; }
 .bottom-right { bottom:-8px; right:-8px; border-left:0; border-top:0; }
+
 footer { padding:30px 20px 50px; text-align:center; }
-#plate-number { font-size:48px; font-weight:800; letter-spacing:4px; font-family:monospace; min-height:60px; }
+#plate-number {
+    font-size:48px; font-weight:800;
+    letter-spacing:4px;
+    font-family:monospace;
+    min-height:60px;
+}
 #info { font-size:13px; color:#888; margin-bottom:20px; }
+
 .btn-group { display:flex; gap:12px; }
-button { flex:1; padding:18px 5px; border-radius:16px; border:none; background:var(--blue); color:#fff; font-weight:bold; font-size:16px; }
+button {
+    flex:1; padding:18px 5px;
+    border-radius:16px; border:none;
+    background:var(--blue); color:#fff;
+    font-weight:bold; font-size:16px;
+}
 button:disabled { background:#333; color:#777; }
 </style>
 </head>
@@ -71,11 +121,30 @@ button:disabled { background:#333; color:#777; }
 </div>
 
 <script>
-/* ===== DOM ===== */
+/* ======================================================
+   OpenCV iOS Safari 穩定初始化（關鍵）
+====================================================== */
+let cvReady = false;
+
+function initCV() {
+    if (typeof cv === 'undefined') {
+        setTimeout(initCV, 50);
+        return;
+    }
+    cv.onRuntimeInitialized = () => {
+        cvReady = true;
+        document.getElementById('progress-fill').style.width = "100%";
+        document.getElementById('status').innerText = "系統就緒";
+        console.log("OpenCV runtime ready");
+    };
+}
+initCV();
+
+/* ======================================================
+   DOM
+====================================================== */
 const video = document.getElementById('video');
 const snap = document.getElementById('snap-preview');
-const progress = document.getElementById('progress-fill');
-const statusText = document.getElementById('status');
 const plateDisplay = document.getElementById('plate-number');
 const infoText = document.getElementById('info');
 const startBtn = document.getElementById('startBtn');
@@ -83,17 +152,11 @@ const captureBtn = document.getElementById('captureBtn');
 const runAiBtn = document.getElementById('runAiBtn');
 const retryBtn = document.getElementById('retryBtn');
 
-let cvReady=false;
-let frameBuffer=[];
+let frameBuffer = [];
 
-/* ===== OpenCV ===== */
-function cvLoaded(){
-    cvReady=true;
-    progress.style.width="100%";
-    statusText.innerText="系統就緒";
-}
-
-/* ===== 台灣機車 ===== */
+/* ======================================================
+   台灣機車規則
+====================================================== */
 const validateTaiwanMoto = t =>
     /^[A-Z]{3}[0-9]{3,4}$/.test(t) || /^[0-9]{3}[A-Z]{3}$/.test(t);
 
@@ -101,23 +164,27 @@ const normalizePlate = t =>
     t.replace(/O/g,'0').replace(/I/g,'1')
      .replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8');
 
-/* ===== Camera ===== */
-startBtn.onclick = async ()=>{
-    if(!cvReady) return alert("系統尚未就緒");
-    const s = await navigator.mediaDevices.getUserMedia({
-        video:{facingMode:"environment",width:{ideal:1280}}
+/* ======================================================
+   Camera
+====================================================== */
+startBtn.onclick = async () => {
+    if (!cvReady) return alert("系統尚未初始化完成，請稍候");
+    const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode:"environment", width:{ideal:1280} }
     });
-    video.srcObject=s;
+    video.srcObject = stream;
     startBtn.style.display="none";
-    captureBtn.disabled=false;
+    captureBtn.disabled = false;
     infoText.innerText="請對準車牌後按下定格";
 };
 
-/* ===== Burst ===== */
-async function captureBurst(){
-    frameBuffer=[];
-    for(let i=0;i<3;i++){
-        const c=document.createElement('canvas');
+/* ======================================================
+   Burst
+====================================================== */
+async function captureBurst() {
+    frameBuffer = [];
+    for (let i=0;i<3;i++){
+        const c = document.createElement('canvas');
         c.width=600; c.height=300;
         c.getContext('2d').drawImage(video,0,0,600,300);
         frameBuffer.push(c);
@@ -125,7 +192,9 @@ async function captureBurst(){
     }
 }
 
-/* ===== Plate Detect（原樣） ===== */
+/* ======================================================
+   Plate detection（原版）
+====================================================== */
 function detectPlateCandidates(src){
     let g=new cv.Mat(), b=new cv.Mat(), e=new cv.Mat();
     let cts=new cv.MatVector(), h=new cv.Mat();
@@ -133,21 +202,23 @@ function detectPlateCandidates(src){
     cv.GaussianBlur(g,b,new cv.Size(5,5),0);
     cv.Canny(b,e,100,200);
     cv.findContours(e,cts,h,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE);
+
     const out=[], area=src.cols*src.rows;
     for(let i=0;i<cts.size();i++){
         const r=cv.boundingRect(cts.get(i));
         const ratio=r.width/r.height;
         const a=r.width*r.height;
-        if(ratio>2.2 && ratio<4.2 && a>area*0.05 && a<area*0.4) out.push(r);
+        if(ratio>2.2 && ratio<4.2 && a>area*0.05 && a<area*0.4)
+            out.push(r);
         cts.get(i).delete();
     }
     g.delete(); b.delete(); e.delete(); cts.delete(); h.delete();
     return out;
 }
 
-/* =======================================================
-   🌈 HSV / Lab / Gray 自動色域 + 智慧前處理（新增）
-======================================================= */
+/* ======================================================
+   HSV / Lab / Gray 自動色域
+====================================================== */
 function scoreMat(mat){
     const m=new cv.Mat(), s=new cv.Mat();
     cv.meanStdDev(mat,m,s);
@@ -180,22 +251,31 @@ function autoColorSpace(src){
     ];
     arr.sort((a,b)=>b.s-a.s);
     arr.slice(1).forEach(o=>o.m.delete());
+
     hsv.delete(); lab.delete(); hs.delete(); ls.delete();
     return arr[0].m;
 }
 
+/* ======================================================
+   Smart preprocess
+====================================================== */
 function smartPreprocess(gray){
     let clahe=new cv.CLAHE(2.5,new cv.Size(8,8));
-    let e=new cv.Mat(); clahe.apply(gray,e);
+    let e=new cv.Mat();
+    clahe.apply(gray,e);
     let b=new cv.Mat();
-    cv.adaptiveThreshold(e,b,255,
+    cv.adaptiveThreshold(
+        e,b,255,
         cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv.THRESH_BINARY,17,7);
+        cv.THRESH_BINARY,17,7
+    );
     e.delete();
     return b;
 }
 
-/* ===== OCR（原流程） ===== */
+/* ======================================================
+   OCR by chars（原流程）
+====================================================== */
 async function ocrByChars(mat){
     let cts=new cv.MatVector(), h=new cv.Mat();
     cv.findContours(mat,cts,h,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE);
@@ -215,10 +295,12 @@ async function ocrByChars(mat){
         roi.delete();
     }
     cts.delete(); h.delete();
-    return {text:normalizePlate(text), score};
+    return { text: normalizePlate(text), score };
 }
 
-/* ===== Buttons ===== */
+/* ======================================================
+   Buttons
+====================================================== */
 captureBtn.onclick = async ()=>{
     await captureBurst();
     snap.style.display="block";
@@ -243,16 +325,18 @@ runAiBtn.onclick = async ()=>{
         }
         src.delete();
     }
+
     if(results.length){
         results.sort((a,b)=>b.score-a.score);
-        plateDisplay.innerText=results[0].text;
+        const best=results[0];
+        plateDisplay.innerText=best.text;
         plateDisplay.style.color="#34C759";
         speechSynthesis.speak(
-            new SpeechSynthesisUtterance(results[0].text.split('').join(' '))
+            new SpeechSynthesisUtterance(best.text.split('').join(' '))
         );
-        statusText.innerText="辨識成功";
+        document.getElementById('status').innerText="辨識成功";
     } else {
-        statusText.innerText="辨識失敗";
+        document.getElementById('status').innerText="辨識失敗";
     }
     runAiBtn.style.display="none";
 };
@@ -266,7 +350,7 @@ retryBtn.onclick=()=>{
     captureBtn.style.display="block";
     plateDisplay.innerText="----";
     plateDisplay.style.color="#fff";
-    statusText.innerText="重新就緒";
+    document.getElementById('status').innerText="重新就緒";
 };
 </script>
 </body>
