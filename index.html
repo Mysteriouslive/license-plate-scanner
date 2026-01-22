@@ -2,28 +2,31 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>MotoScanner Ultra</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
     <div class="app-container">
-        <header><div id="status">多角度追蹤模式</div></header>
+        <header><div id="status">定格掃描模式</div></header>
         <main class="scanner-section">
             <video id="video" autoplay playsinline></video>
+            <img id="snap-preview" style="display:none; position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:5;">
             <div class="scan-overlay">
                 <div class="scan-frame">
                     <div class="corner top-left"></div><div class="corner top-right"></div>
                     <div class="corner bottom-left"></div><div class="corner bottom-right"></div>
-                    <div class="scan-line"></div>
                 </div>
-                <div id="live-preview">正在搜尋機車車牌...</div>
             </div>
         </main>
         <footer>
             <div id="plate-number">----</div>
-            <button id="startBtn">START</button>
+            <div id="live-preview">對準後按下捕捉</div>
+            <div class="btn-group">
+                <button id="captureBtn">📸 捕捉並辨識</button>
+                <button id="retryBtn" style="display:none; background:#444;">重新拍攝</button>
+            </div>
         </footer>
     </div>
     <canvas id="canvas" style="display:none;"></canvas>
