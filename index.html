@@ -1,12 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>MotoScanner AI Ultra</title>
-<link rel="stylesheet" href="style.css" />
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script async src="https://docs.opencv.org/4.7.0/opencv.js" onload="onCvReady();" onerror="onCvError();"></script>
 <style>
 :root { --blue: #0A84FF; --bg: #0a0a0c; --green: #34C759; }
 body { margin: 0; background: var(--bg); color: #fff; font-family: -apple-system, sans-serif; overflow: hidden; height: 100vh; }
@@ -36,7 +33,7 @@ button:disabled { background: #333; color: #777; }
 <body>
 <div class="app-container">
 <header>
-  <div id="status">載入 OpenCV 中...</div>
+  <div id="status">載入系統中...</div>
   <div class="progress-bar-bg"><div id="progress-fill"></div></div>
 </header>
 <main class="scanner-section">
@@ -61,6 +58,8 @@ button:disabled { background: #333; color: #777; }
 </footer>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script async src="https://docs.opencv.org/4.7.0/opencv.js"></script>
 <script>
 const video = document.getElementById('video');
 const snap = document.getElementById('snap-preview');
@@ -74,109 +73,64 @@ const runAiBtn = document.getElementById('runAiBtn');
 const retryBtn = document.getElementById('retryBtn');
 
 let cvReady = false;
+let worker = null;
 let frameBuffer = [];
-let tesseractWorker = null;
 
-function onCvReady(){
-    cvReady = true;
-    updateStatus(100, "系統就緒");
-    if(video.srcObject) captureBtn.disabled = false;
+function updateStatus(p,t){ progress.style.width=p+"%"; if(t) statusText.innerText=t; }
+
+function waitForCv(){
+    return new Promise(resolve=>{
+        let check=setInterval(()=>{
+            if(cv && cv.Mat){
+                clearInterval(check);
+                cvReady=true;
+                updateStatus(100,"系統就緒");
+                resolve();
+            }
+        },200);
+    });
 }
-function onCvError(){
-    updateStatus(0, "OpenCV 載入失敗");
+
+async function initWorker(){
+    worker = Tesseract.createWorker({
+        logger: m=>{
+            if(m.status==='recognizing text') updateStatus(Math.floor(m.progress*100),"辨識中...");
+        }
+    });
+    await worker.load();
+    await worker.loadLanguage('eng');
+    await worker.initialize('eng');
+    await worker.setParameters({ tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', tessedit_pageseg_mode:'7' });
 }
-function updateStatus(p,t){
-    progress.style.width = p + "%";
-    if(t) statusText.innerText = t;
+
+function normalizePlate(t){
+    return t.replace(/O/g,'0').replace(/I/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8');
 }
 
-/* ================= 台灣機車規則 - 放寬版 ================= */
-function isPossiblePlate(t){ return t.length >= 5 && t.length <= 7; }
-function normalizePlate(t){ return t.replace(/O/g,'0').replace(/I/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8'); }
-
-/* ================= 自動學習 ================= */
-const LEARN_KEY='plate_learn_map';
-function loadLearnMap(){ return JSON.parse(localStorage.getItem(LEARN_KEY)||'{}'); }
-function saveLearnMap(map){ localStorage.setItem(LEARN_KEY,JSON.stringify(map)); }
-function learnCorrection(raw,fixed){ if(raw===fixed) return; const map=loadLearnMap(); map[raw]=map[raw]||{}; map[raw][fixed]=(map[raw][fixed]||0)+1; saveLearnMap(map); }
-function applyLearnScore(text){ const map=loadLearnMap(); let bonus=0; Object.keys(map).forEach(k=>{ if(text.startsWith(k)){ const total=Object.values(map[k]).reduce((a,b)=>a+b,0); bonus+=Math.min(20,total*2); } }); return bonus; }
-
-/* ================= 啟動鏡頭 ================= */
-startBtn.addEventListener('click',async()=>{
-    if(!cvReady){ alert("系統尚未初始化完成，請稍候"); return; }
+startBtn.addEventListener('click', async ()=>{
+    if(!cvReady){ alert("系統尚未初始化完成"); return; }
     try{
-        const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment", width:{ideal:1280} }});
+        const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment", width:{ideal:1280}}});
         video.srcObject = stream;
         startBtn.style.display="none";
-        captureBtn.disabled = true;
-        setTimeout(()=>{ captureBtn.disabled = true; captureBtn.disabled=false; },500);
+        captureBtn.disabled=false;
         infoText.innerText="請對準車牌後按下定格";
-    } catch(e){ alert("開啟鏡頭失敗："+e.message); }
+    }catch(e){ alert("開啟鏡頭失敗:"+e.message); }
 });
 
-/* ================= 連拍三張 ================= */
 async function captureBurst(){
     frameBuffer=[];
     for(let i=0;i<3;i++){
-        const c=document.createElement('canvas');
-        c.width=video.videoWidth;
-        c.height=video.videoHeight;
+        let c = document.createElement('canvas');
+        c.width = video.videoWidth || 640;
+        c.height = video.videoHeight || 360;
         c.getContext('2d').drawImage(video,0,0,c.width,c.height);
         frameBuffer.push(c);
         await new Promise(r=>setTimeout(r,120));
     }
 }
 
-/* ================= 車牌偵測 ================= */
-function detectPlateCandidates(src){
-    let g=new cv.Mat(),b=new cv.Mat(),e=new cv.Mat();
-    let cts=new cv.MatVector(),h=new cv.Mat();
-    cv.cvtColor(src,g,cv.COLOR_RGBA2GRAY);
-    cv.GaussianBlur(g,b,new cv.Size(5,5),0);
-    cv.Canny(b,e,100,200);
-    cv.findContours(e,cts,h,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE);
-    const out=[],area=src.cols*src.rows;
-    for(let i=0;i<cts.size();i++){
-        const r=cv.boundingRect(cts.get(i));
-        const ratio=r.width/r.height;
-        const a=r.width*r.height;
-        if(ratio>2.2 && ratio<4.2 && a>area*0.05 && a<area*0.4) out.push(r);
-        cts.get(i).delete();
-    }
-    g.delete(); b.delete(); e.delete(); cts.delete(); h.delete();
-    return out;
-}
-
-/* ================= 初始化 Tesseract Worker ================= */
-async function initWorker(){
-    tesseractWorker=Tesseract.createWorker({ logger:m=>{ if(m.status==='recognizing text') updateStatus(Math.floor(m.progress*100),"辨識中..."); } });
-    await tesseractWorker.load();
-    await tesseractWorker.loadLanguage('eng');
-    await tesseractWorker.initialize('eng');
-    await tesseractWorker.setParameters({ tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', tessedit_pageseg_mode:'7' });
-}
-async function workerOcr(canvas){ const {data:{text,confidence}}=await tesseractWorker.recognize(canvas); return {text:normalizePlate(text.replace(/[^A-Z0-9]/g,'')),confidence}; }
-
-/* ================= 辨識 ================= */
-async function recognizePlateFromMat(src){
-    const rects=detectPlateCandidates(src);
-    let candidates=[];
-    for(let r of rects){
-        let roi=src.roi(r);
-        cv.cvtColor(roi,roi,cv.COLOR_RGBA2GRAY);
-        cv.adaptiveThreshold(roi,roi,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C,cv.THRESH_BINARY,17,13);
-        cv.imshow(snap,roi);
-        const res=await workerOcr(snap);
-        roi.delete();
-        if(isPossiblePlate(res.text)){
-            candidates.push({text:res.text,score:res.confidence+applyLearnScore(res.text)});
-        }
-    }
-    return candidates;
-}
-
-/* ================= 定格 ================= */
-captureBtn.addEventListener('click',async()=>{
+captureBtn.addEventListener('click', async ()=>{
     captureBtn.disabled=true;
     snap.style.display="block";
     captureBtn.style.display="none";
@@ -188,36 +142,34 @@ captureBtn.addEventListener('click',async()=>{
     plateDisplay.style.color="white";
 });
 
-/* ================= 辨識按鈕 ================= */
-runAiBtn.addEventListener('click',async()=>{
+async function runOCR(canvas){
+    const { data:{text,confidence} } = await worker.recognize(canvas);
+    return { text: normalizePlate(text.replace(/[^A-Z0-9]/g,'')), confidence };
+}
+
+runAiBtn.addEventListener('click', async ()=>{
     runAiBtn.disabled=true;
-    let allResults=[];
+    let results = [];
     for(let c of frameBuffer){
-        let src=cv.imread(c);
-        const res=await recognizePlateFromMat(src);
-        src.delete();
-        allResults=allResults.concat(res);
+        let res = await runOCR(c);
+        if(res.text.length>=5 && res.text.length<=7) results.push(res);
     }
-    if(allResults.length===0){
+    if(results.length===0){
         plateDisplay.innerText="----";
         plateDisplay.style.color="#ff453a";
         updateStatus(100,"辨識失敗");
-        runAiBtn.disabled=false;
-        return;
+    }else{
+        results.sort((a,b)=>b.confidence-a.confidence);
+        plateDisplay.innerText = results[0].text;
+        plateDisplay.style.color="#34C759";
+        updateStatus(100,"辨識成功");
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(`號碼 ${results[0].text.split('').join(' ')}`));
     }
-    allResults.sort((a,b)=>b.score-a.score);
-    const best=allResults[0];
-    plateDisplay.innerText=best.text;
-    plateDisplay.style.color="#34C759";
-    updateStatus(100,"辨識成功");
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(`號碼 ${best.text.split('').join(' ')}`));
-    allResults.forEach(r=>{ if(r.text!==best.text) learnCorrection(r.text,best.text); });
     runAiBtn.style.display="none";
     runAiBtn.disabled=false;
 });
 
-/* ================= 重拍 ================= */
-retryBtn.addEventListener('click',()=>{
+retryBtn.addEventListener('click', ()=>{
     frameBuffer=[];
     snap.style.display="none";
     retryBtn.style.display="none";
@@ -230,9 +182,9 @@ retryBtn.addEventListener('click',()=>{
     updateStatus(100,"重新就緒");
 });
 
-/* ================= 初始化 ================= */
-window.addEventListener('load',async()=>{
-    updateStatus(10,"載入 OpenCV 中...");
+window.addEventListener('load', async ()=>{
+    updateStatus(10,"載入系統...");
+    await waitForCv();
     await initWorker();
 });
 </script>
