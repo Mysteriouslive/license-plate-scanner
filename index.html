@@ -2,55 +2,166 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MotoScanner Pro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>MotoScanner AI Ultra</title>
 
+<link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://docs.opencv.org/4.x/opencv.js" onload="cvLoaded()"></script>
 
 <style>
-body { margin:0; background:#000; color:#0A84FF; font-family:sans-serif; }
-video { width:100vw; height:100vh; object-fit:cover; }
-#plate { position:fixed; bottom:30px; width:100%; text-align:center;
-         font-size:40px; font-weight:bold; }
+/* === 原 UI 完整保留 === */
+:root { --blue:#0A84FF; --bg:#0a0a0c; --green:#34C759; }
+body { margin:0; background:var(--bg); color:#fff; font-family:-apple-system,sans-serif; overflow:hidden; height:100vh; }
+.app-container { display:flex; flex-direction:column; height:100%; }
+header { padding-top:50px; text-align:center; }
+#status { font-size:11px; font-weight:bold; color:var(--blue); letter-spacing:2px; }
+.progress-bar-bg { width:140px; height:4px; background:rgba(255,255,255,.1); margin:8px auto; border-radius:2px; overflow:hidden; }
+#progress-fill { height:100%; width:0%; background:var(--blue); transition:.3s; }
+.scanner-section { position:relative; flex:1; margin:10px 20px; border-radius:24px; overflow:hidden; background:#000; border:1px solid rgba(255,255,255,.1); }
+video { width:100%; height:100%; object-fit:cover; }
+#snap-preview { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:260px; height:110px; border:2px solid var(--blue); z-index:15; }
+.scan-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+.scan-frame { width:260px; height:110px; border:1px solid rgba(255,255,255,.2); position:relative; }
+.corner { position:absolute; width:30px; height:30px; border:8px solid var(--blue); }
+.top-left { top:-8px; left:-8px; border-right:0; border-bottom:0; }
+.top-right { top:-8px; right:-8px; border-left:0; border-bottom:0; }
+.bottom-left { bottom:-8px; left:-8px; border-right:0; border-top:0; }
+.bottom-right { bottom:-8px; right:-8px; border-left:0; border-top:0; }
+footer { padding:30px 20px 50px; text-align:center; }
+#plate-number { font-size:48px; font-weight:800; letter-spacing:4px; font-family:monospace; min-height:60px; }
+#info { font-size:13px; color:#888; margin-bottom:20px; }
+.btn-group { display:flex; gap:12px; }
+button { flex:1; padding:18px 5px; border-radius:16px; border:none; background:var(--blue); color:#fff; font-weight:bold; font-size:16px; }
+button:disabled { background:#333; color:#777; }
 </style>
 </head>
 
 <body>
-<video id="video" autoplay playsinline muted></video>
-<div id="plate">----</div>
+<div class="app-container">
+
+<header>
+    <div id="status">載入 OpenCV 中...</div>
+    <div class="progress-bar-bg"><div id="progress-fill"></div></div>
+</header>
+
+<main class="scanner-section">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="snap-preview"></canvas>
+    <div class="scan-overlay">
+        <div class="scan-frame">
+            <div class="corner top-left"></div>
+            <div class="corner top-right"></div>
+            <div class="corner bottom-left"></div>
+            <div class="corner bottom-right"></div>
+        </div>
+    </div>
+</main>
+
+<footer>
+    <div id="plate-number">----</div>
+    <div id="info">請先啟動鏡頭</div>
+    <div class="btn-group">
+        <button id="startBtn">啟動鏡頭</button>
+        <button id="captureBtn" disabled>截圖定格</button>
+        <button id="runAiBtn" style="display:none;background:#34C759;">確認辨識</button>
+        <button id="retryBtn" style="display:none;background:#444;">重新拍攝</button>
+    </div>
+</footer>
+</div>
 
 <script>
-let cvReady=false;
-const video=document.getElementById('video');
-const plateDiv=document.getElementById('plate');
+/* ===== DOM ===== */
+const video = document.getElementById('video');
+const snap = document.getElementById('snap-preview');
+const progress = document.getElementById('progress-fill');
+const statusText = document.getElementById('status');
+const plateDisplay = document.getElementById('plate-number');
+const infoText = document.getElementById('info');
+const startBtn = document.getElementById('startBtn');
+const captureBtn = document.getElementById('captureBtn');
+const runAiBtn = document.getElementById('runAiBtn');
+const retryBtn = document.getElementById('retryBtn');
 
-function cvLoaded(){ cvReady=true; startCam(); }
+let cvReady=false;
+let frameBuffer=[];
+
+/* ===== OpenCV ===== */
+function cvLoaded(){
+    cvReady=true;
+    progress.style.width="100%";
+    statusText.innerText="系統就緒";
+}
+
+/* ===== 台灣機車 ===== */
+const validateTaiwanMoto = t =>
+    /^[A-Z]{3}[0-9]{3,4}$/.test(t) || /^[0-9]{3}[A-Z]{3}$/.test(t);
+
+const normalizePlate = t =>
+    t.replace(/O/g,'0').replace(/I/g,'1')
+     .replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8');
 
 /* ===== Camera ===== */
-async function startCam(){
-    const s=await navigator.mediaDevices.getUserMedia({
+startBtn.onclick = async ()=>{
+    if(!cvReady) return alert("系統尚未就緒");
+    const s = await navigator.mediaDevices.getUserMedia({
         video:{facingMode:"environment",width:{ideal:1280}}
     });
     video.srcObject=s;
-    requestAnimationFrame(loop);
+    startBtn.style.display="none";
+    captureBtn.disabled=false;
+    infoText.innerText="請對準車牌後按下定格";
+};
+
+/* ===== Burst ===== */
+async function captureBurst(){
+    frameBuffer=[];
+    for(let i=0;i<3;i++){
+        const c=document.createElement('canvas');
+        c.width=600; c.height=300;
+        c.getContext('2d').drawImage(video,0,0,600,300);
+        frameBuffer.push(c);
+        await new Promise(r=>setTimeout(r,120));
+    }
 }
 
-/* ===== Color Auto ===== */
+/* ===== Plate Detect（原樣） ===== */
+function detectPlateCandidates(src){
+    let g=new cv.Mat(), b=new cv.Mat(), e=new cv.Mat();
+    let cts=new cv.MatVector(), h=new cv.Mat();
+    cv.cvtColor(src,g,cv.COLOR_RGBA2GRAY);
+    cv.GaussianBlur(g,b,new cv.Size(5,5),0);
+    cv.Canny(b,e,100,200);
+    cv.findContours(e,cts,h,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE);
+    const out=[], area=src.cols*src.rows;
+    for(let i=0;i<cts.size();i++){
+        const r=cv.boundingRect(cts.get(i));
+        const ratio=r.width/r.height;
+        const a=r.width*r.height;
+        if(ratio>2.2 && ratio<4.2 && a>area*0.05 && a<area*0.4) out.push(r);
+        cts.get(i).delete();
+    }
+    g.delete(); b.delete(); e.delete(); cts.delete(); h.delete();
+    return out;
+}
+
+/* =======================================================
+   🌈 HSV / Lab / Gray 自動色域 + 智慧前處理（新增）
+======================================================= */
 function scoreMat(mat){
     const m=new cv.Mat(), s=new cv.Mat();
     cv.meanStdDev(mat,m,s);
-    const c=s.data64F[0];
+    const contrast=s.data64F[0];
     let e=new cv.Mat();
     cv.Canny(mat,e,80,160);
-    const ed=cv.countNonZero(e)/(mat.rows*mat.cols);
+    const edge=cv.countNonZero(e)/(mat.rows*mat.cols);
     m.delete(); s.delete(); e.delete();
-    return c*0.7 + ed*300;
+    return contrast*0.7 + edge*300;
 }
 
 function autoColorSpace(src){
-    let g=new cv.Mat();
-    cv.cvtColor(src,g,cv.COLOR_RGBA2GRAY);
+    let gray=new cv.Mat();
+    cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
 
     let hsv=new cv.Mat();
     cv.cvtColor(src,hsv,cv.COLOR_RGBA2HSV);
@@ -63,7 +174,7 @@ function autoColorSpace(src){
     let l=ls.get(0);
 
     const arr=[
-        {m:g,s:scoreMat(g)},
+        {m:gray,s:scoreMat(gray)},
         {m:v,s:scoreMat(v)},
         {m:l,s:scoreMat(l)}
     ];
@@ -73,8 +184,7 @@ function autoColorSpace(src){
     return arr[0].m;
 }
 
-/* ===== Smart preprocess ===== */
-function preprocess(gray){
+function smartPreprocess(gray){
     let clahe=new cv.CLAHE(2.5,new cv.Size(8,8));
     let e=new cv.Mat(); clahe.apply(gray,e);
     let b=new cv.Mat();
@@ -85,25 +195,79 @@ function preprocess(gray){
     return b;
 }
 
-/* ===== Main Loop ===== */
-async function loop(){
-    if(!cvReady) return;
-
-    let src=cv.imread(video);
-    let best=autoColorSpace(src);
-    let bin=preprocess(best);
-
-    const res=await Tesseract.recognize(
-        cv.imshow(document.createElement('canvas'),bin),
-        'eng',{tessedit_char_whitelist:'A-Z0-9'}
-    );
-
-    const t=res.data.text.replace(/[^A-Z0-9]/g,'');
-    if(t.length>=6) plateDiv.innerText=t;
-
-    src.delete(); best.delete(); bin.delete();
-    requestAnimationFrame(loop);
+/* ===== OCR（原流程） ===== */
+async function ocrByChars(mat){
+    let cts=new cv.MatVector(), h=new cv.Mat();
+    cv.findContours(mat,cts,h,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE);
+    let text='', score=0;
+    for(let i=0;i<cts.size();i++){
+        const r=cv.boundingRect(cts.get(i));
+        if(r.height<mat.rows*0.4) continue;
+        const roi=mat.roi(r);
+        cv.resize(roi,roi,new cv.Size(60,80));
+        cv.imshow(snap,roi);
+        const res=await Tesseract.recognize(snap,'eng',{
+            tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+            tessedit_pageseg_mode:'10'
+        });
+        const ch=res.data.text.replace(/[^A-Z0-9]/g,'')[0]||'';
+        text+=ch; score+=res.data.confidence||0;
+        roi.delete();
+    }
+    cts.delete(); h.delete();
+    return {text:normalizePlate(text), score};
 }
+
+/* ===== Buttons ===== */
+captureBtn.onclick = async ()=>{
+    await captureBurst();
+    snap.style.display="block";
+    captureBtn.style.display="none";
+    runAiBtn.style.display="block";
+    retryBtn.style.display="block";
+};
+
+runAiBtn.onclick = async ()=>{
+    runAiBtn.disabled=true;
+    const results=[];
+    for(const f of frameBuffer){
+        const src=cv.imread(f);
+        const rects=detectPlateCandidates(src);
+        for(const r of rects){
+            const roi=src.roi(r);
+            const best=autoColorSpace(roi);
+            const bin=smartPreprocess(best);
+            const res=await ocrByChars(bin);
+            if(validateTaiwanMoto(res.text)) results.push(res);
+            roi.delete(); best.delete(); bin.delete();
+        }
+        src.delete();
+    }
+    if(results.length){
+        results.sort((a,b)=>b.score-a.score);
+        plateDisplay.innerText=results[0].text;
+        plateDisplay.style.color="#34C759";
+        speechSynthesis.speak(
+            new SpeechSynthesisUtterance(results[0].text.split('').join(' '))
+        );
+        statusText.innerText="辨識成功";
+    } else {
+        statusText.innerText="辨識失敗";
+    }
+    runAiBtn.style.display="none";
+};
+
+retryBtn.onclick=()=>{
+    frameBuffer=[];
+    snap.style.display="none";
+    retryBtn.style.display="none";
+    runAiBtn.style.display="none";
+    runAiBtn.disabled=false;
+    captureBtn.style.display="block";
+    plateDisplay.innerText="----";
+    plateDisplay.style.color="#fff";
+    statusText.innerText="重新就緒";
+};
 </script>
 </body>
 </html>
