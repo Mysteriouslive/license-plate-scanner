@@ -58,3 +58,15 @@ async function processFrame() {
 }
 
 startBtn.addEventListener('click', initCamera);
+
+// 在成功辨識後加入簡單的冷卻時間
+let lastPlate = "";
+if (match && match[0] !== lastPlate) {
+    lastPlate = match[0];
+    plateDisplay.innerText = match[0];
+    // 辨識成功時讓框框閃一下藍光
+    document.querySelector('.scan-frame').style.borderColor = "var(--accent-blue)";
+    setTimeout(() => {
+        document.querySelector('.scan-frame').style.borderColor = "var(--scan-frame-border)";
+    }, 500);
+}
