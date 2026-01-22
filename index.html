@@ -1,43 +1,109 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>MotoScanner AI Ultra</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="onCvReady();" onerror="onCvError();"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MotoScanner Pro</title>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://docs.opencv.org/4.x/opencv.js" onload="cvLoaded()"></script>
+
+<style>
+body { margin:0; background:#000; color:#0A84FF; font-family:sans-serif; }
+video { width:100vw; height:100vh; object-fit:cover; }
+#plate { position:fixed; bottom:30px; width:100%; text-align:center;
+         font-size:40px; font-weight:bold; }
+</style>
 </head>
+
 <body>
-    <div class="app-container">
-        <header>
-            <div id="status">正在下載 AI 核心 (10MB)...</div>
-            <div class="progress-bar-bg"><div id="progress-fill"></div></div>
-        </header>
+<video id="video" autoplay playsinline muted></video>
+<div id="plate">----</div>
 
-        <main class="scanner-section">
-            <video id="video" autoplay playsinline muted></video>
-            <canvas id="snap-preview"></canvas>
-            
-            <div class="scan-overlay">
-                <div class="scan-frame">
-                    <div class="corner top-left"></div><div class="corner top-right"></div>
-                    <div class="corner bottom-left"></div><div class="corner bottom-right"></div>
-                </div>
-            </div>
-        </main>
+<script>
+let cvReady=false;
+const video=document.getElementById('video');
+const plateDiv=document.getElementById('plate');
 
-        <footer>
-            <div id="plate-number">----</div>
-            <div id="info">請先啟動鏡頭</div>
-            <div class="btn-group">
-                <button id="startBtn">啟動鏡頭</button>
-                <button id="captureBtn" disabled>截圖定格</button>
-                <button id="runAiBtn" style="display:none; background:#34C759;">確認辨識</button>
-                <button id="retryBtn" style="display:none; background:#444;">重新拍攝</button>
-            </div>
-        </footer>
-    </div>
-    <script async src="https://docs.opencv.org/4.x/opencv.js" onload="cvLoaded()"></script>
+function cvLoaded(){ cvReady=true; startCam(); }
+
+/* ===== Camera ===== */
+async function startCam(){
+    const s=await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:"environment",width:{ideal:1280}}
+    });
+    video.srcObject=s;
+    requestAnimationFrame(loop);
+}
+
+/* ===== Color Auto ===== */
+function scoreMat(mat){
+    const m=new cv.Mat(), s=new cv.Mat();
+    cv.meanStdDev(mat,m,s);
+    const c=s.data64F[0];
+    let e=new cv.Mat();
+    cv.Canny(mat,e,80,160);
+    const ed=cv.countNonZero(e)/(mat.rows*mat.cols);
+    m.delete(); s.delete(); e.delete();
+    return c*0.7 + ed*300;
+}
+
+function autoColorSpace(src){
+    let g=new cv.Mat();
+    cv.cvtColor(src,g,cv.COLOR_RGBA2GRAY);
+
+    let hsv=new cv.Mat();
+    cv.cvtColor(src,hsv,cv.COLOR_RGBA2HSV);
+    let hs=new cv.MatVector(); cv.split(hsv,hs);
+    let v=hs.get(2);
+
+    let lab=new cv.Mat();
+    cv.cvtColor(src,lab,cv.COLOR_RGBA2Lab);
+    let ls=new cv.MatVector(); cv.split(lab,ls);
+    let l=ls.get(0);
+
+    const arr=[
+        {m:g,s:scoreMat(g)},
+        {m:v,s:scoreMat(v)},
+        {m:l,s:scoreMat(l)}
+    ];
+    arr.sort((a,b)=>b.s-a.s);
+    arr.slice(1).forEach(o=>o.m.delete());
+    hsv.delete(); lab.delete(); hs.delete(); ls.delete();
+    return arr[0].m;
+}
+
+/* ===== Smart preprocess ===== */
+function preprocess(gray){
+    let clahe=new cv.CLAHE(2.5,new cv.Size(8,8));
+    let e=new cv.Mat(); clahe.apply(gray,e);
+    let b=new cv.Mat();
+    cv.adaptiveThreshold(e,b,255,
+        cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv.THRESH_BINARY,17,7);
+    e.delete();
+    return b;
+}
+
+/* ===== Main Loop ===== */
+async function loop(){
+    if(!cvReady) return;
+
+    let src=cv.imread(video);
+    let best=autoColorSpace(src);
+    let bin=preprocess(best);
+
+    const res=await Tesseract.recognize(
+        cv.imshow(document.createElement('canvas'),bin),
+        'eng',{tessedit_char_whitelist:'A-Z0-9'}
+    );
+
+    const t=res.data.text.replace(/[^A-Z0-9]/g,'');
+    if(t.length>=6) plateDiv.innerText=t;
+
+    src.delete(); best.delete(); bin.delete();
+    requestAnimationFrame(loop);
+}
+</script>
 </body>
 </html>
