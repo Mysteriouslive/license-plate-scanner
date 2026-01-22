@@ -6,12 +6,12 @@
     <title>MotoScanner AI Ultra</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="cvLoaded();" onerror="cvError();"></script>
+    <script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="onCvReady();" onerror="onCvError();"></script>
 </head>
 <body>
     <div class="app-container">
         <header>
-            <div id="status">正在載入 AI 核心 (10MB)...</div>
+            <div id="status">正在下載 AI 引擎...</div>
             <div class="progress-bar-bg"><div id="progress-fill"></div></div>
         </header>
 
@@ -29,7 +29,7 @@
 
         <footer>
             <div id="plate-number">----</div>
-            <div id="info">READY</div>
+            <div id="info">請先啟動鏡頭</div>
             <div class="btn-group">
                 <button id="startBtn">啟動鏡頭</button>
                 <button id="captureBtn" disabled>截圖定格</button>
@@ -38,7 +38,6 @@
             </div>
         </footer>
     </div>
-    <canvas id="buffer-canvas" style="display:none;"></canvas>
     <script src="script.js"></script>
 </body>
 </html>
