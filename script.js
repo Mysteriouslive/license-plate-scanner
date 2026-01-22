@@ -7,6 +7,7 @@ const startBtn = document.getElementById('startBtn');
 const captureBtn = document.getElementById('captureBtn');
 const retryBtn = document.getElementById('retryBtn');
 
+// 台灣機車規則
 const validateMoto = (t) => /^[A-Z]{3}[0-9]{3,4}$|^[0-9]{3}[A-Z]{3}$/.test(t);
 
 // 1. 啟動鏡頭
@@ -18,22 +19,20 @@ startBtn.addEventListener('click', async () => {
         video.srcObject = stream;
         startBtn.style.display = "none";
         captureBtn.disabled = false;
-        previewText.innerText = "已就緒，請對準機車車牌";
-    } catch (err) { alert("相機啟動失敗"); }
+        previewText.innerText = "請將車牌放入藍色框內拍攝";
+    } catch (err) { alert("無法存取相機"); }
 });
 
-// 2. 捕捉與辨識
+// 2. 捕捉並多重辨識
 captureBtn.addEventListener('click', async () => {
     const sCtx = snapCanvas.getContext('2d');
     const cCtx = calcCanvas.getContext('2d');
     
-    // 計算視訊裁切比例 (與 CSS 框框位置對齊)
-    const sx = video.videoWidth * 0.2;
-    const sy = video.videoHeight * 0.3; // 根據實際畫面微調
-    const sw = video.videoWidth * 0.6;
-    const sh = video.videoHeight * 0.4;
+    // 獲取相機流中的裁切座標 (對齊 CSS 框框位置)
+    const sx = video.videoWidth * 0.2, sy = video.videoHeight * 0.3;
+    const sw = video.videoWidth * 0.6, sh = video.videoHeight * 0.4;
 
-    // 定格框框內容
+    // 定格顯示框框內的畫面
     snapCanvas.width = 600;
     snapCanvas.height = 300;
     sCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 600, 300);
@@ -41,13 +40,15 @@ captureBtn.addEventListener('click', async () => {
     
     captureBtn.style.display = "none";
     retryBtn.style.display = "block";
-    previewText.innerText = "多重算法比對中...";
+    previewText.innerText = "多重辨識中，請稍候...";
 
+    // AI 計算專用畫布
     calcCanvas.width = 1000;
     calcCanvas.height = 500;
 
+    // 不同濾鏡組，專門解決 9/3 誤認
     const filters = [
-        'contrast(3.5) grayscale(1) brightness(0.8)', // 針對 9/3 優化
+        'contrast(3.5) grayscale(1) brightness(0.8)', 
         'contrast(2.5) grayscale(1) brightness(1.2)',
         'contrast(4) grayscale(1) invert(0)'
     ];
@@ -56,6 +57,7 @@ captureBtn.addEventListener('click', async () => {
 
     for (let f of filters) {
         cCtx.filter = f;
+        // 直接從剛才拍下的 snapCanvas 取圖
         cCtx.drawImage(snapCanvas, 0, 0, 600, 300, 0, 0, 1000, 500);
         
         try {
@@ -78,7 +80,7 @@ captureBtn.addEventListener('click', async () => {
         window.speechSynthesis.speak(new SpeechSynthesisUtterance(`辨識成功 ${best.split('').join(' ')}`));
     } else {
         plateDisplay.innerText = "FAIL";
-        previewText.innerText = "無法辨識，請重拍";
+        previewText.innerText = "辨識失敗，請調整角度重新拍攝";
     }
 });
 
@@ -89,5 +91,5 @@ retryBtn.addEventListener('click', () => {
     captureBtn.style.display = "block";
     plateDisplay.innerText = "----";
     plateDisplay.style.color = "white";
-    previewText.innerText = "請重新對準捕捉";
+    previewText.innerText = "請重新對準後捕捉";
 });
