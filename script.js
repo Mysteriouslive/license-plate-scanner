@@ -11,6 +11,15 @@ const retryBtn = document.getElementById('retryBtn');
 
 let cvReady = false;
 
+// 【重新加入】台灣機車車牌規則判斷 (例如 ABC-1234 或 123-ABC)
+const validateTaiwanMoto = (t) => {
+    const rules = [
+        /^[A-Z]{3}[0-9]{3,4}$/, // 新式機車 (三英+三/四數)
+        /^[0-9]{3}[A-Z]{3}$/    // 舊式機車 (三數+三英)
+    ];
+    return rules.some(regex => regex.test(t));
+};
+
 function cvLoaded() {
     cvReady = true;
     updateStatus(100, "系統就緒");
@@ -35,45 +44,41 @@ startBtn.addEventListener('click', async () => {
     } catch (e) { alert("無法啟動鏡頭，請檢查 HTTPS"); }
 });
 
-// 2. 最原始的定格方法：直接用 Canvas 繪製，不經過 OpenCV 確保不卡頓
+// 2. 原始穩定定格：自動裁切並「撐滿」藍框
 captureBtn.addEventListener('click', () => {
     const ctx = snap.getContext('2d');
-    
-    // 計算視訊裁切座標 (藍色框框的位置)
     const sw = video.videoWidth * 0.6;
     const sh = video.videoHeight * 0.3;
     const sx = (video.videoWidth - sw) / 2;
     const sy = (video.videoHeight - sh) / 2.5;
 
-    // 設置畫布尺寸為 600x300 (自動密合撐滿)
     snap.width = 600;
     snap.height = 300;
     
-    // 執行原生地繪製 (100% 成功觸發)
+    // 定格並密合撐滿
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 600, 300);
     
     snap.style.display = "block";
     captureBtn.style.display = "none";
     runAiBtn.style.display = "block";
     retryBtn.style.display = "block";
-    infoText.innerText = "已定格，確認後開始辨識";
+    infoText.innerText = "已自動密合，確認後開始辨識";
 });
 
-// 3. 確認辨識：此時才執行平面化與字母黑化
+// 3. 確認辨識：執行平面化、字母黑化與規則驗證
 runAiBtn.addEventListener('click', async () => {
     runAiBtn.disabled = true;
-    updateStatus(20, "執行平面化與字母加深...");
+    updateStatus(20, "執行影像黑化加深...");
 
     let src = cv.imread(snap);
     let dst = new cv.Mat();
     
-    // 平面化與黑化加深
+    // 影像黑化處理：字母變黑、背景反白
     cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
     cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 17, 13);
-    
-    cv.imshow(snap, dst); // 更新畫面上看到的結果
+    cv.imshow(snap, dst); 
 
-    updateStatus(50, "啟動 AI 辨識中...");
+    updateStatus(50, "AI 規則比對中...");
     try {
         const result = await Tesseract.recognize(snap, 'eng', {
             logger: m => { if(m.status === 'recognizing text') updateStatus(50 + (m.progress * 50), "正在計算..."); },
@@ -82,12 +87,19 @@ runAiBtn.addEventListener('click', async () => {
         });
 
         let txt = result.data.text.replace(/[^A-Z0-9]/g, "");
-        plateDisplay.innerText = txt || "FAIL";
-        plateDisplay.style.color = txt ? "#34C759" : "red";
-        updateStatus(100, txt ? "辨識完成" : "辨識失敗");
         
-        if (txt) {
+        // 【核心】檢查是否符合台灣車牌規則
+        if (validateTaiwanMoto(txt)) {
+            plateDisplay.innerText = txt;
+            plateDisplay.style.color = "#34C759";
+            updateStatus(100, "辨識成功");
             window.speechSynthesis.speak(new SpeechSynthesisUtterance(`號碼 ${txt.split('').join(' ')}`));
+        } else {
+            // 如果辨識結果不符規則，嘗試尋找字串中可能的車牌部分
+            plateDisplay.innerText = "格式錯誤";
+            plateDisplay.style.color = "orange";
+            infoText.innerText = `辨識到: ${txt} (不符規則)`;
+            updateStatus(100, "辨識失敗");
         }
     } catch (e) { console.error(e); }
 
@@ -102,5 +114,6 @@ retryBtn.addEventListener('click', () => {
     runAiBtn.disabled = false;
     captureBtn.style.display = "block";
     plateDisplay.innerText = "----";
+    plateDisplay.style.color = "white";
     updateStatus(100, "重新就緒");
 });
