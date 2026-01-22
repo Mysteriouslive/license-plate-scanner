@@ -2,40 +2,27 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Plate Scanner Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
-    <div class="app-container">
-        <header>
-            <h2>車牌辨識系統</h2>
-            <div id="status" class="status-badge">準備就緒</div>
-        </header>
+    <header>
+        <div id="status">Ready</div>
+    </header>
 
-        <main class="scanner-section">
-            <video id="video" autoplay playsinline></video>
-            
-            <div class="scan-overlay">
-                <div class="scan-frame">
-                    <div class="scan-line"></div>
-                    <div class="corner top-left"></div>
-                    <div class="corner top-right"></div>
-                    <div class="corner bottom-left"></div>
-                    <div class="corner bottom-right"></div>
-                </div>
-            </div>
-        </main>
+    <main class="scanner-section">
+        <video id="video" autoplay playsinline></video>
+        <div class="scan-overlay">
+            <div class="scan-frame"></div>
+        </div>
+    </main>
 
-        <footer>
-            <div class="result-box">
-                <small>辨識結果</small>
-                <div id="plate-number">等待辨識...</div>
-            </div>
-            <button id="startBtn">啟動掃描器</button>
-        </footer>
-    </div>
+    <footer>
+        <div id="plate-number">----</div>
+        <button id="startBtn">START SCAN</button>
+    </footer>
     
     <canvas id="canvas" style="display:none;"></canvas>
     <script src="script.js"></script>
