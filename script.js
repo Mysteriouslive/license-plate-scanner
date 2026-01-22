@@ -1,55 +1,36 @@
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const plateDisplay = document.getElementById('plate-number');
-const previewText = document.getElementById('live-preview');
-const confirmBtn = document.getElementById('confirmBtn');
-const startBtn = document.getElementById('startBtn');
-
-let isScanning = false;
-
-async function initCamera() {
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment", width: 1280 } 
-    });
-    video.srcObject = stream;
-    startBtn.style.display = "none";
-    isScanning = true;
-    requestAnimationFrame(processFrame);
-}
-
 async function processFrame() {
     if (!isScanning) return;
 
     const ctx = canvas.getContext('2d');
-    // 設定擷取比例：因為框框在上方，我們只抓取畫面中上的部分
     canvas.width = 400;
     canvas.height = 200;
 
-    // 擷取影像中上的區域
+    // 擷取影像中上的區域（對應你的藍色框框）
     ctx.drawImage(video, video.videoWidth*0.2, video.videoHeight*0.1, video.videoWidth*0.6, video.videoHeight*0.4, 0, 0, 400, 200);
 
     try {
         const result = await Tesseract.recognize(canvas, 'eng', {
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
+            // 【關鍵】只允許大寫英文字母與數字，徹底排除符號
+            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
         });
 
-        const rawText = result.data.text.trim();
-        previewText.innerText = "偵測中: " + (rawText || "...");
+        // 1. 取得原始文字
+        let rawText = result.data.text;
 
-        // 正則匹配：搜尋符合車牌格式的字串
-        const match = rawText.match(/[A-Z0-9-]{5,8}/);
-        if (match) {
-            plateDisplay.innerText = match[0];
-            confirmBtn.style.display = "block"; // 顯示確認按鈕
+        // 2. 用正則表達式再次過濾：只留下 A-Z 和 0-9
+        let cleanText = rawText.replace(/[^A-Z0-9]/g, "");
+
+        previewText.innerText = "掃描中: " + (cleanText || "...");
+
+        // 3. 判斷長度（一般車牌為 5-8 碼），符合才顯示在主視窗
+        if (cleanText.length >= 5 && cleanText.length <= 8) {
+            plateDisplay.innerText = cleanText;
+            confirmBtn.style.display = "block";
         }
-    } catch (e) {}
+    } catch (e) {
+        console.error("辨識出錯:", e);
+    }
 
-    setTimeout(processFrame, 800);
+    // 稍微縮短間隔，增加即時感
+    setTimeout(processFrame, 600);
 }
-
-confirmBtn.addEventListener('click', () => {
-    alert("已確認車牌號碼：" + plateDisplay.innerText);
-    // 可以在這裡把資料送到後端或儲存
-});
-
-startBtn.addEventListener('click', initCamera);
