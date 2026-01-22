@@ -3,27 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Web License Plate Scanner</title>
+    <title>AI Plate Scanner Pro</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>車牌掃描器</h1>
-        <div class="video-wrapper">
-            <video id="video" autoplay playsinline></video>
-            <div class="scan-region"></div>
-        </div>
-        
-        <div class="controls">
-            <button id="startBtn">開始辨識</button>
-            <p id="status">狀態: 點擊開始</p>
-        </div>
+    <div class="app-container">
+        <header>
+            <h2>車牌辨識系統</h2>
+            <div id="status" class="status-badge">準備就緒</div>
+        </header>
 
-        <div class="result-card">
-            <small>偵測結果：</small>
-            <div id="plate-number">----</div>
-        </div>
+        <main class="scanner-section">
+            <video id="video" autoplay playsinline></video>
+            
+            <div class="scan-overlay">
+                <div class="scan-frame">
+                    <div class="scan-line"></div>
+                    <div class="corner top-left"></div>
+                    <div class="corner top-right"></div>
+                    <div class="corner bottom-left"></div>
+                    <div class="corner bottom-right"></div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <div class="result-box">
+                <small>辨識結果</small>
+                <div id="plate-number">等待辨識...</div>
+            </div>
+            <button id="startBtn">啟動掃描器</button>
+        </footer>
     </div>
     
     <canvas id="canvas" style="display:none;"></canvas>
