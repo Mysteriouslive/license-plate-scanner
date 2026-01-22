@@ -67,6 +67,10 @@ function updateStatus(p, t) {
 
 /* ================= 啟動鏡頭 ================= */
 startBtn.addEventListener('click', async () => {
+    if (!cvReady) {
+        alert("系統尚未初始化完成，請稍候 1 秒");
+        return;
+    }
     const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1280 } }
     });
