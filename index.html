@@ -3,20 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>MotoScanner Pro</title>
+    <title>MotoScanner Ultra</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
     <div class="app-container">
         <header>
-            <div id="status">系統就緒</div>
+            <div id="status">正在初始化引擎...</div>
         </header>
 
         <main class="scanner-section">
-            <video id="video" autoplay playsinline></video>
+            <video id="video" autoplay playsinline muted></video>
             <canvas id="snap-preview"></canvas>
-            
             <div class="scan-overlay">
                 <div class="scan-frame">
                     <div class="corner top-left"></div><div class="corner top-right"></div>
