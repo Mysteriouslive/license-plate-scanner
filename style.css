@@ -1,8 +1,6 @@
-:root { --accent: #0A84FF; --bg: #0a0a0c; --green: #34C759; }
-
-html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--bg); color: white; font-family: -apple-system, sans-serif; touch-action: none; }
+:root { --accent: #0A84FF; --bg: #0a0a0c; }
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--bg); color: white; font-family: sans-serif; touch-action: none; }
 .app-container { display: flex; flex-direction: column; height: 100vh; }
-
 header { padding-top: 50px; text-align: center; }
 #status { font-size: 11px; color: var(--accent); font-weight: bold; letter-spacing: 1px; }
 .progress-container { width: 140px; height: 4px; background: rgba(255,255,255,0.1); margin: 8px auto; border-radius: 2px; overflow: hidden; }
@@ -14,7 +12,7 @@ video { width: 100%; height: 100%; object-fit: cover; }
 #snap-preview {
     display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     width: 260px; height: 110px; z-index: 15; border: 2px solid var(--accent); border-radius: 4px;
-    background: #000; image-rendering: pixelated;
+    image-rendering: pixelated; /* 讓加深後的文字邊緣不模糊 */
 }
 
 .scan-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 10; pointer-events: none; }
@@ -27,7 +25,5 @@ video { width: 100%; height: 100%; object-fit: cover; }
 
 footer { padding: 30px 20px 50px; text-align: center; }
 #plate-number { font-size: 48px; font-weight: 800; letter-spacing: 6px; font-family: monospace; min-height: 60px; margin-bottom: 15px; }
-#info { font-size: 13px; color: #888; margin-bottom: 20px; }
 .btn-group { display: flex; gap: 12px; }
 button { flex: 1; padding: 18px 5px; border-radius: 16px; border: none; background: var(--accent); color: white; font-weight: bold; font-size: 16px; }
-button:disabled { background: #333; color: #777; }
