@@ -2,23 +2,24 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MotoScanner Ultra</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>MotoScanner</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
     <div class="app-container">
-        <header><div id="status">多角度追蹤模式</div></header>
+        <header><div id="status">機車全規則辨識</div></header>
         <main class="scanner-section">
             <video id="video" autoplay playsinline></video>
             <div class="scan-overlay">
                 <div class="scan-frame">
-                    <div class="corner top-left"></div><div class="corner top-right"></div>
-                    <div class="corner bottom-left"></div><div class="corner bottom-right"></div>
-                    <div class="scan-line"></div>
+                    <div class="corner top-left"></div>
+                    <div class="corner top-right"></div>
+                    <div class="corner bottom-left"></div>
+                    <div class="corner bottom-right"></div>
                 </div>
-                <div id="live-preview">正在搜尋機車車牌...</div>
+                <div id="live-preview">READY</div>
             </div>
         </main>
         <footer>
