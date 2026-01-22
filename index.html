@@ -2,35 +2,34 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Scanner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Scanner</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
-    <header><div id="status">車牌掃描系統</div></header>
-    
-    <main class="scanner-section">
-        <video id="video" autoplay playsinline></video>
-        <div class="scan-overlay">
-            <div class="scan-frame">
-                <div class="corner top-left"></div>
-                <div class="corner top-right"></div>
-                <div class="corner bottom-left"></div>
-                <div class="corner bottom-right"></div>
+    <div class="app-container">
+        <header><div id="status">Ready</div></header>
+        <main class="scanner-section">
+            <video id="video" autoplay playsinline></video>
+            <div class="scan-overlay">
+                <div class="scan-frame">
+                    <div class="corner top-left"></div>
+                    <div class="corner top-right"></div>
+                    <div class="corner bottom-left"></div>
+                    <div class="corner bottom-right"></div>
+                </div>
+                <div id="live-preview">...</div>
             </div>
-            <div id="live-preview">等待影像...</div>
-        </div>
-    </main>
-
-    <footer>
-        <div id="plate-number">----</div>
-        <div class="btn-group">
-            <button id="startBtn">啟動掃描</button>
-            <button id="confirmBtn">✅ 確認號碼</button>
-        </div>
-    </footer>
-
+        </main>
+        <footer>
+            <div id="plate-number">----</div>
+            <div class="btn-group">
+                <button id="startBtn">START</button>
+                <button id="confirmBtn">CONFIRM</button>
+            </div>
+        </footer>
+    </div>
     <canvas id="canvas" style="display:none;"></canvas>
     <script src="script.js"></script>
 </body>
