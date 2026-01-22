@@ -7,16 +7,14 @@ const startBtn = document.getElementById('startBtn');
 async function initCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment", width: 1280, height: 720 },
-            audio: false 
+            video: { facingMode: "environment", width: 1280, height: 720 }
         });
         video.srcObject = stream;
-        statusText.innerText = "掃描中...";
-        statusText.style.background = "#007AFF";
+        statusText.innerText = "SCANNING...";
         startBtn.style.display = "none";
         requestAnimationFrame(processFrame);
     } catch (err) {
-        statusText.innerText = "請開啟相機權限";
+        statusText.innerText = "CAMERA ERROR";
     }
 }
 
@@ -24,49 +22,30 @@ async function processFrame() {
     if (video.paused || video.ended) return;
 
     const ctx = canvas.getContext('2d');
-    
-    // 設定 Canvas 大小與影片一致
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = 640; 
+    canvas.height = 360;
 
-    // 取得縮放比例（因為影片是被 object-fit: cover 的）
-    // 這裡我們簡單計算框框在影片中的相對位置進行裁切
-    const cropX = canvas.width * 0.25;
-    const cropY = canvas.height * 0.4;
-    const cropW = canvas.width * 0.5;
-    const cropH = canvas.height * 0.2;
+    // 關鍵調整：裁切範圍上移 (對應 CSS 的 padding-top)
+    // 我們抓取影片畫面中上方約 30% 處的影像
+    ctx.drawImage(video, video.videoWidth * 0.2, video.videoHeight * 0.2, video.videoWidth * 0.6, video.videoHeight * 0.3, 0, 0, canvas.width, canvas.height);
 
-    // 將裁切後的影像畫到畫布上 (只畫掃描框範圍)
-    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
-
-    // 每 1.5 秒執行一次 OCR 避免過載
     try {
         const result = await Tesseract.recognize(canvas, 'eng', {
             tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
         });
 
-        const match = result.data.text.match(/[A-Z0-9-]{5,8}/g);
+        const match = result.data.text.match(/[A-Z0-9-]{5,8}/);
         if (match) {
             plateDisplay.innerText = match[0];
-            plateDisplay.style.color = "#00ff88";
+            // 辨識到時閃爍提示
+            document.querySelector('.scan-frame').style.borderColor = "#fff";
+            setTimeout(() => {
+                document.querySelector('.scan-frame').style.borderColor = "rgba(255,255,255,0.3)";
+            }, 200);
         }
-    } catch (e) {
-        console.error(e);
-    }
+    } catch (e) {}
 
-    setTimeout(processFrame, 1500);
+    setTimeout(processFrame, 1000); // 每一秒辨識一次，平衡性能與電力
 }
 
 startBtn.addEventListener('click', initCamera);
-
-// 在成功辨識後加入簡單的冷卻時間
-let lastPlate = "";
-if (match && match[0] !== lastPlate) {
-    lastPlate = match[0];
-    plateDisplay.innerText = match[0];
-    // 辨識成功時讓框框閃一下藍光
-    document.querySelector('.scan-frame').style.borderColor = "var(--accent-blue)";
-    setTimeout(() => {
-        document.querySelector('.scan-frame').style.borderColor = "var(--scan-frame-border)";
-    }, 500);
-}
