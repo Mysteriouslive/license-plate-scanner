@@ -2,28 +2,28 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Scanner</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
-    <header>
-        <div id="status">Ready</div>
-    </header>
-
+    <header><div id="status">READY TO SCAN</div></header>
     <main class="scanner-section">
         <video id="video" autoplay playsinline></video>
         <div class="scan-overlay">
-            <div class="scan-frame"></div>
+            <div class="scan-frame">
+                <div class="corner top-left"></div>
+                <div class="corner top-right"></div>
+                <div class="corner bottom-left"></div>
+                <div class="corner bottom-right"></div>
+            </div>
         </div>
     </main>
-
     <footer>
         <div id="plate-number">----</div>
-        <button id="startBtn">START SCAN</button>
+        <button id="startBtn">START</button>
     </footer>
-    
     <canvas id="canvas" style="display:none;"></canvas>
     <script src="script.js"></script>
 </body>
