@@ -1,27 +1,34 @@
-:root { --accent: #0A84FF; --bg: #0a0a0c; }
+:root { --accent: #0A84FF; --bg: #0a0a0c; --green: #34C759; }
+
+/* 進度條外框 */
+.progress-container {
+    width: 140px; height: 4px; background: rgba(255,255,255,0.1);
+    margin: 8px auto; border-radius: 2px; overflow: hidden;
+}
+
+/* 動態進度條本體 */
+#progress-bar {
+    width: 0%; height: 100%; background: var(--accent);
+    transition: width 0.3s ease;
+}
+
+/* 其他樣式維持不變 */
 html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--bg); color: white; font-family: sans-serif; }
 .app-container { display: flex; flex-direction: column; height: 100vh; }
 header { padding-top: 50px; text-align: center; }
-.scanner-section { position: relative; flex: 1; margin: 10px 20px; border-radius: 24px; overflow: hidden; background: #000; }
+#status { font-size: 11px; color: var(--accent); letter-spacing: 1px; font-weight: bold; }
+.scanner-section { position: relative; flex: 1; margin: 10px 20px; border-radius: 24px; overflow: hidden; }
 video { width: 100%; height: 100%; object-fit: cover; }
-
-/* 校正後的畫面會完美塞滿藍框 */
-#snap-preview {
-    display: none; position: absolute;
-    top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 260px; height: 110px;
-    z-index: 15; border: 2px solid var(--accent); border-radius: 4px;
-}
-
-.scan-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+#snap-preview { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 260px; height: 110px; z-index: 15; border: 2px solid var(--accent); border-radius: 4px; }
+.scan-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; pointer-events: none; }
 .scan-frame { width: 260px; height: 110px; position: relative; border: 1px solid rgba(255,255,255,0.2); }
 .corner { position: absolute; width: 30px; height: 30px; border: 8px solid var(--accent); z-index: 20; }
 .top-left { top: -8px; left: -8px; border-right: 0; border-bottom: 0; }
 .top-right { top: -8px; right: -8px; border-left: 0; border-bottom: 0; }
 .bottom-left { bottom: -8px; left: -8px; border-right: 0; border-top: 0; }
 .bottom-right { bottom: -8px; right: -8px; border-left: 0; border-top: 0; }
-
 footer { padding: 30px 20px 50px; text-align: center; }
-#plate-number { font-size: 48px; font-weight: 800; letter-spacing: 6px; font-family: monospace; min-height: 60px; }
-.btn-group { display: flex; gap: 10px; margin-top: 20px; }
-button { flex: 1; padding: 18px; border-radius: 16px; border: none; background: var(--accent); color: white; font-weight: bold; }
+#plate-number { font-size: 48px; font-weight: 800; letter-spacing: 6px; font-family: monospace; min-height: 60px; margin-bottom: 20px; }
+.btn-group { display: flex; gap: 12px; }
+button { flex: 1; padding: 18px 5px; border-radius: 16px; border: none; background: var(--accent); color: white; font-weight: bold; }
+button:disabled { background: #333; color: #777; }
