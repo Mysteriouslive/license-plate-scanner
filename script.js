@@ -1,6 +1,5 @@
 const video = document.getElementById('video');
 const snap = document.getElementById('snap-preview');
-const buffer = document.getElementById('buffer-canvas');
 const progress = document.getElementById('progress-fill');
 const statusText = document.getElementById('status');
 const plateDisplay = document.getElementById('plate-number');
@@ -12,77 +11,81 @@ const retryBtn = document.getElementById('retryBtn');
 
 let cvReady = false;
 
-function cvLoaded() {
+// 引擎載入控制
+function onCvReady() {
     cvReady = true;
     updateStatus(100, "系統就緒");
-    if(video.srcObject) captureBtn.disabled = false;
+    if (video.srcObject) captureBtn.disabled = false;
 }
-function cvError() { updateStatus(0, "載入失敗，請檢查網路"); }
+function onCvError() { updateStatus(0, "引擎載入失敗"); }
 
 function updateStatus(per, txt) {
     progress.style.width = per + "%";
-    if(txt) statusText.innerText = txt;
+    if (txt) statusText.innerText = txt;
 }
 
+// 1. 啟動鏡頭
 startBtn.addEventListener('click', async () => {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: 1280 } });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment", width: { ideal: 1280 } } 
+        });
         video.srcObject = stream;
         startBtn.style.display = "none";
-        if(cvReady) captureBtn.disabled = false;
-        infoText.innerText = "對準後按定格";
-    } catch (e) { alert("請使用 HTTPS 環境"); }
+        if (cvReady) captureBtn.disabled = false;
+        infoText.innerText = "請對準車牌後按下定格";
+    } catch (e) { alert("無法啟動鏡頭，請檢查 HTTPS 權限"); }
 });
 
-// 【重點】截圖定格：使用原生 drawImage 確保 100% 觸發
+// 2. 截圖定格：改用最底層 Canvas 指令，確保「點擊必觸發」
 captureBtn.addEventListener('click', () => {
-    const sCtx = snap.getContext('2d');
+    const ctx = snap.getContext('2d');
     
-    // 1. 計算裁切比例 (對應藍色框框的位置)
+    // 計算視訊裁切座標 (對齊藍框位置)
     const sw = video.videoWidth * 0.6;
     const sh = video.videoHeight * 0.3;
     const sx = (video.videoWidth - sw) / 2;
     const sy = (video.videoHeight - sh) / 2.5;
 
-    // 2. 設置畫布尺寸並「撐滿」
+    // 設置畫布尺寸為 600x300 (實現縮放密合)
     snap.width = 600;
     snap.height = 300;
     
-    // 將視訊局部拉伸並繪製到 600x300 的畫布，實現「密合撐滿」
-    sCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 600, 300);
+    // 執行原生地定格繪製 (此步驟不依賴 OpenCV，極快且不卡頓)
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 600, 300);
     
-    // 3. 切換 UI
     snap.style.display = "block";
     captureBtn.style.display = "none";
     runAiBtn.style.display = "block";
     retryBtn.style.display = "block";
-    infoText.innerText = "已密合定格，請確認清晰度";
+    infoText.innerText = "定格成功，請確認清晰度";
 });
 
-// 【重點】水平化 + 字母黑化加深
+// 3. 確認後：水平化 + 黑化加深 + 辨識
 runAiBtn.addEventListener('click', async () => {
     runAiBtn.disabled = true;
-    updateStatus(20, "影像水平化與加深中...");
+    updateStatus(20, "正在執行水平化校正...");
 
     let src = cv.imread(snap);
     let dst = new cv.Mat();
     
-    // A. 水平化校正
+    // --- 水平平面化 (透視校正) ---
     let srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, 600, 0, 600, 300, 0, 300]);
     let dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, 600, 0, 600, 300, 0, 300]);
     let M = cv.getPerspectiveTransform(srcPts, dstPts);
     cv.warpPerspective(src, dst, M, new cv.Size(600, 300));
 
-    // B. 字母黑化背景反白
+    // --- 字母黑化 + 背景反白 (自適應二值化) ---
+    updateStatus(40, "字母加深中...");
     cv.cvtColor(dst, dst, cv.COLOR_RGBA2GRAY);
-    cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 17, 14);
+    cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 17, 13);
     
-    cv.imshow(snap, dst); // 更新顯示黑化後的影像
+    cv.imshow(snap, dst); // 更新畫面上看到的結果
 
-    updateStatus(50, "AI 辨識中...");
+    updateStatus(60, "AI 文字辨識中...");
     try {
         const result = await Tesseract.recognize(snap, 'eng', {
-            logger: m => { if(m.status === 'recognizing text') updateStatus(50 + (m.progress * 50), "分析中..."); },
+            logger: m => { if(m.status === 'recognizing text') updateStatus(60 + (m.progress * 40), "分析中..."); },
             tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
             tessedit_pageseg_mode: '7'
         });
@@ -91,6 +94,11 @@ runAiBtn.addEventListener('click', async () => {
         plateDisplay.innerText = txt || "FAIL";
         plateDisplay.style.color = txt ? "#34C759" : "red";
         updateStatus(100, txt ? "辨識完成" : "辨識失敗");
+        
+        if(txt) {
+            const utterance = new SpeechSynthesisUtterance(`辨識結果 ${txt.split('').join(' ')}`);
+            window.speechSynthesis.speak(utterance);
+        }
     } catch (e) { console.error(e); }
 
     src.delete(); dst.delete(); M.delete(); srcPts.delete(); dstPts.delete();
