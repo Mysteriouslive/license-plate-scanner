@@ -3,21 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>MotoScanner Pro</title>
+    <title>MotoScanner AI Pro</title>
     <link rel="stylesheet" href="style.css">
+    <script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="onCvLoaded();"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="cvLoaded();"></script>
 </head>
 <body>
     <div class="app-container">
         <header>
-            <div id="status">載入中...</div>
-            <div class="progress-bar-bg"><div id="progress-fill"></div></div>
+            <div id="status">正在下載 AI 引擎...</div>
+            <div class="progress-container">
+                <div id="progress-bar"></div>
+            </div>
         </header>
 
         <main class="scanner-section">
             <video id="video" autoplay playsinline muted></video>
             <canvas id="snap-preview"></canvas>
+            
             <div class="scan-overlay">
                 <div class="scan-frame">
                     <div class="corner top-left"></div><div class="corner top-right"></div>
@@ -28,12 +31,12 @@
 
         <footer>
             <div id="plate-number">----</div>
-            <div id="info">請先啟動鏡頭</div>
+            <div id="info">READY</div>
             <div class="btn-group">
                 <button id="startBtn">啟動鏡頭</button>
                 <button id="captureBtn" disabled>截圖定格</button>
                 <button id="runAiBtn" style="display:none; background:#34C759;">確認辨識</button>
-                <button id="retryBtn" style="display:none; background:#444;">重拍</button>
+                <button id="retryBtn" style="display:none; background:#444;">重新拍攝</button>
             </div>
         </footer>
     </div>
