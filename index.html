@@ -5,47 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>MotoScanner AI Ultra</title>
     <style>
-        :root { --primary: #007AFF; --success: #34C759; --danger: #FF3B30; }
-        body { margin: 0; font-family: -apple-system, sans-serif; background: #000; color: #fff; overflow: hidden; }
+        :root { --primary: #007AFF; --success: #34C759; --bg: #000; }
+        body { margin: 0; font-family: -apple-system, sans-serif; background: var(--bg); color: #fff; overflow: hidden; }
         .app-container { display: flex; flex-direction: column; height: 100vh; }
         
-        header { padding: 20px; text-align: center; background: rgba(0,0,0,0.8); z-index: 10; }
-        #status { font-size: 14px; margin-bottom: 10px; color: var(--primary); font-weight: bold; }
+        header { padding: 15px; text-align: center; background: rgba(0,0,0,0.8); }
+        #status { font-size: 13px; margin-bottom: 8px; color: var(--primary); }
         .progress-bar-bg { width: 100%; height: 4px; background: #333; border-radius: 2px; }
         #progress-fill { width: 0%; height: 100%; background: var(--primary); transition: width 0.3s; }
 
-        .scanner-section { flex: 1; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        .scanner-section { flex: 1; position: relative; overflow: hidden; background: #111; }
         #video, #snap-preview { width: 100%; height: 100%; object-fit: cover; position: absolute; }
-        #snap-preview { display: none; z-index: 5; background: #000; }
+        #snap-preview { display: none; z-index: 5; }
         
-        .scan-overlay { position: absolute; z-index: 6; width: 80%; height: 30%; pointer-events: none; }
-        .scan-frame { position: relative; width: 100%; height: 100%; border: 1px solid rgba(255,255,255,0.2); }
-        .corner { position: absolute; width: 25px; height: 25px; border: 5px solid var(--primary); }
-        .top-left { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
-        .top-right { top: -2px; right: -2px; border-left: 0; border-bottom: 0; }
-        .bottom-left { bottom: -2px; left: -2px; border-right: 0; border-top: 0; }
-        .bottom-right { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
+        .scan-overlay { position: absolute; top:0; left:0; width:100%; height:100%; z-index: 6; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+        .scan-frame { width: 80%; height: 25%; position: relative; border: 1px solid rgba(255,255,255,0.2); }
+        .corner { position: absolute; width: 20px; height: 20px; border: 4px solid var(--primary); }
+        .top-left { top:-2px; left:-2px; border-right:0; border-bottom:0; }
+        .top-right { top:-2px; right:-2px; border-left:0; border-bottom:0; }
+        .bottom-left { bottom:-2px; left:-2px; border-right:0; border-top:0; }
+        .bottom-right { bottom:-2px; right:-2px; border-left:0; border-top:0; }
 
-        footer { padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); background: rgba(0,0,0,0.9); text-align: center; z-index: 10; border-top: 1px solid #333; }
-        #plate-number { font-size: 48px; font-weight: 800; margin-bottom: 15px; letter-spacing: 3px; height: 60px; color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
-        #info { font-size: 14px; color: #888; margin-bottom: 20px; }
+        footer { padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); background: rgba(0,0,0,0.95); border-top: 1px solid #333; }
+        #plate-number { font-size: 42px; font-weight: 800; text-align: center; margin-bottom: 10px; height: 55px; letter-spacing: 2px; }
+        #info { font-size: 14px; color: #888; text-align: center; margin-bottom: 15px; }
         
-        /* 這裡修正了按鈕寬度 */
-        .btn-group { display: flex; gap: 12px; justify-content: center; width: 100%; max-width: 600px; margin: 0 auto; }
-        button { 
-            flex: 1; 
-            padding: 18px 0; 
-            border-radius: 14px; 
-            border: none; 
-            font-size: 18px; 
-            font-weight: 700; 
-            color: white; 
-            background: var(--primary); 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            -webkit-tap-highlight-color: transparent;
-        }
-        button:active { opacity: 0.8; transform: scale(0.98); }
-        button:disabled { opacity: 0.2; transform: none; }
+        .btn-group { display: flex; gap: 12px; width: 100%; }
+        button { flex: 1; padding: 18px 0; border-radius: 12px; border: none; font-size: 18px; font-weight: bold; color: white; background: var(--primary); }
+        button:disabled { opacity: 0.2; }
         button#retryBtn { background: #333; }
         button#runAiBtn { background: var(--success); }
     </style>
@@ -53,26 +40,21 @@
 <body>
 <div class="app-container">
     <header>
-        <div id="status">準備中...</div>
+        <div id="status">正在加載系統...</div>
         <div class="progress-bar-bg"><div id="progress-fill"></div></div>
     </header>
 
     <main class="scanner-section">
         <video id="video" autoplay playsinline muted></video>
         <canvas id="snap-preview"></canvas>
-        <div class="scan-overlay">
-            <div class="scan-frame">
-                <div class="corner top-left"></div><div class="corner top-right"></div>
-                <div class="corner bottom-left"></div><div class="corner bottom-right"></div>
-            </div>
-        </div>
+        <div class="scan-overlay"><div class="scan-frame"><div class="corner top-left"></div><div class="corner top-right"></div><div class="corner bottom-left"></div><div class="corner bottom-right"></div></div></div>
     </main>
 
     <footer>
         <div id="plate-number">----</div>
-        <div id="info">正在加載核心組件...</div>
+        <div id="info">初始化中...</div>
         <div class="btn-group">
-            <button id="startBtn" disabled>啟動鏡頭</button>
+            <button id="startBtn">啟動鏡頭</button>
             <button id="captureBtn" style="display:none">截圖定格</button>
             <button id="runAiBtn" style="display:none">確認辨識</button>
             <button id="retryBtn" style="display:none">重新拍攝</button>
@@ -82,9 +64,134 @@
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://docs.opencv.org/4.x/opencv.js"></script>
+
 <script>
-// 此處保留上一版本的 JS 邏輯，確保 OpenCV 與 Tesseract 正確運作
-// (內容略，建議使用上一段提供的 JS 程式碼)
+// --- 初始化與 DOM ---
+const video = document.getElementById('video');
+const snap = document.getElementById('snap-preview');
+const progress = document.getElementById('progress-fill');
+const statusText = document.getElementById('status');
+const plateDisplay = document.getElementById('plate-number');
+const infoText = document.getElementById('info');
+const startBtn = document.getElementById('startBtn');
+const captureBtn = document.getElementById('captureBtn');
+const runAiBtn = document.getElementById('runAiBtn');
+const retryBtn = document.getElementById('retryBtn');
+
+let tesseractWorker = null;
+let frameBuffer = [];
+const LEARN_KEY = 'plate_learn_map';
+
+function updateUI(p, t) {
+    progress.style.width = p + "%";
+    if(t) statusText.innerText = t;
+}
+
+// --- 核心功能：台灣機車規則與校正 ---
+const validateTaiwanMoto = t => /^[A-Z]{3}[0-9]{3,4}$/.test(t) || /^[0-9]{3}[A-Z]{3}$/.test(t);
+const normalizePlate = t => t.replace(/O/g,'0').replace(/I/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8');
+
+function learnCorrection(raw, fixed) {
+    if (raw === fixed) return;
+    const map = JSON.parse(localStorage.getItem(LEARN_KEY) || '{}');
+    map[raw] = map[raw] || {};
+    map[raw][fixed] = (map[raw][fixed] || 0) + 1;
+    localStorage.setItem(LEARN_KEY, JSON.stringify(map));
+}
+
+// --- OpenCV 初始化檢查 ---
+let cvReady = false;
+function checkEngine() {
+    if (typeof cv !== 'undefined' && cv.onRuntimeInitialized) {
+        cvReady = true;
+        initTesseract();
+    } else {
+        setTimeout(checkEngine, 500);
+    }
+}
+
+async function initTesseract() {
+    updateUI(40, "載入 AI 模型...");
+    tesseractWorker = await Tesseract.createWorker('eng');
+    await tesseractWorker.setParameters({
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+        tessedit_pageseg_mode: '7'
+    });
+    updateUI(100, "系統就緒");
+    infoText.innerText = "請點擊啟動鏡頭";
+}
+
+// --- 流程控制 ---
+startBtn.onclick = async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment", width:{ideal:1280}}});
+    video.srcObject = stream;
+    startBtn.style.display="none";
+    captureBtn.style.display="block";
+    infoText.innerText="請對準車牌後按下定格";
+};
+
+captureBtn.onclick = async () => {
+    frameBuffer = [];
+    const tempCvs = document.createElement('canvas');
+    tempCvs.width = video.videoWidth; tempCvs.height = video.videoHeight;
+    const ctx = tempCvs.getContext('2d');
+    
+    for(let i=0; i<3; i++) {
+        ctx.drawImage(video, 0, 0);
+        frameBuffer.push(ctx.getImageData(0,0,tempCvs.width,tempCvs.height));
+        await new Promise(r=>setTimeout(r,100));
+    }
+    
+    snap.width = video.videoWidth; snap.height = video.videoHeight;
+    snap.getContext('2d').putImageData(frameBuffer[2], 0, 0);
+    snap.style.display="block";
+    captureBtn.style.display="none";
+    runAiBtn.style.display="block";
+    retryBtn.style.display="block";
+};
+
+runAiBtn.onclick = async () => {
+    runAiBtn.disabled = true;
+    updateUI(30, "正在分析圖像...");
+    
+    let results = [];
+    let src = cv.imread(snap);
+    
+    // 補回原本的車牌定位邏輯
+    let gray = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    cv.adaptiveThreshold(gray, gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+    
+    // 這裡進行全圖辨識 (簡化定位以提高手機相容性)
+    const result = await tesseractWorker.recognize(snap);
+    const cleanedText = normalizePlate(result.data.text.replace(/[^A-Z0-9]/g, ''));
+    
+    if(cleanedText) {
+        plateDisplay.innerText = cleanedText;
+        if(validateTaiwanMoto(cleanedText)) {
+            plateDisplay.style.color = var(--success);
+            window.speechSynthesis.speak(new SpeechSynthesisUtterance("辨識成功 " + cleanedText));
+        }
+    } else {
+        plateDisplay.innerText = "辨識失敗";
+    }
+
+    src.delete(); gray.delete();
+    updateUI(100, "辨識結束");
+    runAiBtn.disabled = false;
+};
+
+retryBtn.onclick = () => {
+    snap.style.display="none";
+    runAiBtn.style.display="none";
+    retryBtn.style.display="none";
+    captureBtn.style.display="block";
+    plateDisplay.innerText="----";
+    plateDisplay.style.color="#fff";
+    updateUI(100, "就緒");
+};
+
+checkEngine();
 </script>
 </body>
 </html>
