@@ -9,10 +9,9 @@
         body { margin: 0; font-family: -apple-system, sans-serif; background: var(--bg); color: #fff; overflow: hidden; }
         .app-container { display: flex; flex-direction: column; height: 100vh; }
         
-        /* 進度條樣式優化 */
         header { padding: 15px; text-align: center; background: rgba(0,0,0,0.8); border-bottom: 1px solid #222; }
-        #status-container { margin-bottom: 8px; }
-        #status { font-size: 14px; color: var(--primary); font-weight: bold; }
+        #status-container { margin-bottom: 8px; font-weight: bold; }
+        #status { font-size: 14px; color: var(--primary); }
         #timer-text { font-size: 12px; color: #888; margin-left: 8px; }
         .progress-bar-bg { width: 100%; height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
         #progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #007AFF, #5856D6); transition: width 0.4s ease; }
@@ -34,7 +33,8 @@
         #info { font-size: 14px; color: #888; text-align: center; margin-bottom: 20px; }
         
         .btn-group { display: flex; gap: 12px; width: 100%; max-width: 600px; margin: 0 auto; }
-        button { flex: 1; padding: 18px 0; border-radius: 14px; border: none; font-size: 18px; font-weight: bold; color: white; background: var(--primary); }
+        button { flex: 1; padding: 18px 0; border-radius: 14px; border: none; font-size: 18px; font-weight: bold; color: white; background: var(--primary); transition: 0.2s; -webkit-tap-highlight-color: transparent; }
+        button:active { transform: scale(0.96); opacity: 0.8; }
         button:disabled { opacity: 0.15; filter: grayscale(1); }
         button#retryBtn { background: #333; }
         button#runAiBtn { background: var(--success); }
@@ -43,27 +43,19 @@
 <body>
 <div class="app-container">
     <header>
-        <div id="status-container">
-            <span id="status">系統初始化...</span>
-            <span id="timer-text">預計剩餘 15s</span>
-        </div>
+        <div id="status-container"><span id="status">初始化引擎...</span><span id="timer-text">預計 15s</span></div>
         <div class="progress-bar-bg"><div id="progress-fill"></div></div>
     </header>
 
     <main class="scanner-section">
         <video id="video" autoplay playsinline muted></video>
         <canvas id="snap-preview"></canvas>
-        <div class="scan-overlay">
-            <div class="scan-frame">
-                <div class="corner top-left"></div><div class="corner top-right"></div>
-                <div class="corner bottom-left"></div><div class="corner bottom-right"></div>
-            </div>
-        </div>
+        <div class="scan-overlay"><div class="scan-frame"><div class="corner top-left"></div><div class="corner top-right"></div><div class="corner bottom-left"></div><div class="corner bottom-right"></div></div></div>
     </main>
 
     <footer>
         <div id="plate-number">----</div>
-        <div id="info">請等待 AI 引擎載入</div>
+        <div id="info">正在準備 AI 模型...</div>
         <div class="btn-group">
             <button id="startBtn" disabled>啟動鏡頭</button>
             <button id="captureBtn" style="display:none">截圖定格</button>
@@ -77,159 +69,142 @@
 <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady();"></script>
 
 <script>
-// =================== 全域與載入控制 ===================
-let cvReady = false;
-let tesseractReady = false;
-let tesseractWorker = null;
-let timeLeft = 15; // 預估總下載與載入時間
-let countdownTimer;
+// =================== 配置與變數 ===================
+let cvReady = false, tesseractReady = false, tesseractWorker = null;
+let frameBuffer = [], timeLeft = 15, countdownTimer;
+const LEARN_KEY = 'plate_learn_map';
 
-const statusText = document.getElementById('status');
-const timerText = document.getElementById('timer-text');
-const progress = document.getElementById('progress-fill');
-const startBtn = document.getElementById('startBtn');
+const dom = {
+    status: document.getElementById('status'),
+    timer: document.getElementById('timer-text'),
+    progress: document.getElementById('progress-fill'),
+    plate: document.getElementById('plate-number'),
+    info: document.getElementById('info'),
+    start: document.getElementById('startBtn'),
+    capture: document.getElementById('captureBtn'),
+    run: document.getElementById('runAiBtn'),
+    retry: document.getElementById('retryBtn'),
+    video: document.getElementById('video'),
+    snap: document.getElementById('snap-preview')
+};
 
-// 進度管理員
+// =================== 初始化流程 ===================
 function updateLoader(percent, message) {
-    progress.style.width = percent + "%";
-    statusText.innerText = message;
+    dom.progress.style.width = percent + "%";
+    dom.status.innerText = message;
     if (percent >= 100) {
         clearInterval(countdownTimer);
-        timerText.innerText = "完成";
-        startBtn.disabled = false;
-        document.getElementById('info').innerText = "系統已就緒，請點擊啟動鏡頭";
+        dom.timer.innerText = "就緒";
+        dom.start.disabled = false;
+        dom.info.innerText = "系統已就緒，請開啟鏡頭";
     }
 }
 
-// 倒數計時邏輯
-countdownTimer = setInterval(() => {
-    if (timeLeft > 1) {
-        timeLeft--;
-        timerText.innerText = `預計剩餘 ${timeLeft}s`;
-    }
-}, 1000);
+countdownTimer = setInterval(() => { if (timeLeft > 1) { timeLeft--; dom.timer.innerText = `剩餘 ${timeLeft}s`; } }, 1000);
 
-// OpenCV 載入通知
 function onOpenCvReady() {
     cvReady = true;
-    updateLoader(50, "OpenCV 模組載入成功，準備 Tesseract...");
+    updateLoader(50, "OpenCV 載入成功，啟動 OCR...");
     initTesseract();
 }
 
-// Tesseract 初始化與語言包下載
 async function initTesseract() {
     try {
-        updateLoader(60, "下載 AI 文字模型 (約 10MB)...");
         tesseractWorker = await Tesseract.createWorker('eng', 1, {
             logger: m => {
-                if (m.status === "loading tesseract core") updateLoader(70, "載入核心組件...");
-                if (m.status === "loading language traineddata") updateLoader(80, "下載機車號碼語系...");
-                if (m.status === "initializing api") updateLoader(90, "優化運算引擎...");
+                if (m.status === "loading language traineddata") updateLoader(80, "下載文字模型...");
+                if (m.status === "initializing api") updateLoader(90, "優化神經網路...");
             }
         });
-        
-        await tesseractWorker.setParameters({
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-            tessedit_pageseg_mode: '7' // 單行辨識模式
-        });
-        
+        await tesseractWorker.setParameters({ tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', tessedit_pageseg_mode: '7' });
         tesseractReady = true;
-        updateLoader(100, "所有模組就緒");
-    } catch (e) {
-        statusText.innerText = "載入失敗，請檢查網路";
-        statusText.style.color = "red";
-    }
+        updateLoader(100, "AI 引擎完全就緒");
+    } catch (e) { updateLoader(0, "載入失敗，請重整"); }
 }
 
-// =================== 保留原本核心功能 ===================
+// =================== 核心算法 ===================
 const validateTaiwanMoto = t => /^[A-Z]{3}[0-9]{3,4}$/.test(t) || /^[0-9]{3}[A-Z]{3}$/.test(t);
 const normalizePlate = t => t.replace(/O/g,'0').replace(/I/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8');
 
-// 原本的 OpenCV 車牌候選區偵測
-function detectPlateCandidates(src) {
-    let g = new cv.Mat(), b = new cv.Mat(), e = new cv.Mat();
-    let cts = new cv.MatVector(), h = new cv.Mat();
-    cv.cvtColor(src, g, cv.COLOR_RGBA2GRAY);
-    cv.GaussianBlur(g, b, new cv.Size(5, 5), 0);
-    cv.Canny(b, e, 100, 200);
-    cv.findContours(e, cts, h, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-    const out = [];
-    const area = src.cols * src.rows;
-    for (let i = 0; i < cts.size(); i++) {
-        const r = cv.boundingRect(cts.get(i));
-        const ratio = r.width / r.height;
-        const a = r.width * r.height;
-        if (ratio > 1.4 && ratio < 4.5 && a > area * 0.02 && a < area * 0.4) {
-            out.push(r);
-        }
-    }
-    g.delete(); b.delete(); e.delete(); cts.delete(); h.delete();
-    return out;
+function learnCorrection(raw, fixed) {
+    const map = JSON.parse(localStorage.getItem(LEARN_KEY) || '{}');
+    map[raw] = map[raw] || {};
+    map[raw][fixed] = (map[raw][fixed] || 0) + 1;
+    localStorage.setItem(LEARN_KEY, JSON.stringify(map));
 }
 
-// =================== 按鈕互動邏輯 ===================
-const video = document.getElementById('video');
-const snap = document.getElementById('snap-preview');
-const captureBtn = document.getElementById('captureBtn');
-const runAiBtn = document.getElementById('runAiBtn');
-const retryBtn = document.getElementById('retryBtn');
-const plateDisplay = document.getElementById('plate-number');
-
-document.getElementById('startBtn').onclick = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 } }
-    });
-    video.srcObject = stream;
-    startBtn.style.display = "none";
-    captureBtn.style.display = "block";
-    document.getElementById('info').innerText = "將車牌放入框內並按定格";
-};
-
-captureBtn.onclick = async () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
-    
-    snap.width = canvas.width; snap.height = canvas.height;
-    snap.getContext('2d').drawImage(canvas, 0, 0);
-    snap.style.display = "block";
-    
-    captureBtn.style.display = "none";
-    runAiBtn.style.display = "block";
-    retryBtn.style.display = "block";
-};
-
-runAiBtn.onclick = async () => {
-    runAiBtn.disabled = true;
-    updateLoader(50, "AI 辨識中...");
-    
+// =================== 互動邏輯 ===================
+dom.start.onclick = async () => {
     try {
-        const result = await tesseractWorker.recognize(snap);
-        const text = normalizePlate(result.data.text.replace(/[^A-Z0-9]/g, ''));
-        
-        plateDisplay.innerText = text || "未識別";
-        if (validateTaiwanMoto(text)) {
-            plateDisplay.style.color = "#34C759";
-            window.speechSynthesis.speak(new SpeechSynthesisUtterance("號碼為 " + text));
-        } else {
-            plateDisplay.style.color = "#FF9500";
-        }
-    } catch (e) {
-        plateDisplay.innerText = "出錯";
+        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } } });
+        dom.video.srcObject = s;
+        dom.start.style.display = "none";
+        dom.capture.style.display = "block";
+        dom.info.innerText = "對準車牌後按定格 (連拍 3 幀)";
+    } catch (e) { alert("鏡頭開啟失敗"); }
+};
+
+dom.capture.onclick = async () => {
+    frameBuffer = [];
+    const c = document.createElement('canvas');
+    c.width = dom.video.videoWidth; c.height = dom.video.videoHeight;
+    const ctx = c.getContext('2d');
+
+    for(let i=0; i<3; i++) {
+        ctx.drawImage(dom.video, 0, 0);
+        frameBuffer.push(ctx.getImageData(0,0,c.width,c.height));
+        await new Promise(r => setTimeout(r, 150));
     }
+
+    dom.snap.width = c.width; dom.snap.height = c.height;
+    dom.snap.getContext('2d').putImageData(frameBuffer[2], 0, 0);
+    dom.snap.style.display = "block";
+    dom.capture.style.display = "none";
+    dom.run.style.display = "block";
+    dom.retry.style.display = "block";
+};
+
+dom.run.onclick = async () => {
+    dom.run.disabled = true;
+    updateLoader(30, "多幀投票分析中...");
     
-    runAiBtn.disabled = false;
+    let votes = [];
+    for (let i = 0; i < frameBuffer.length; i++) {
+        const temp = document.createElement('canvas');
+        temp.width = dom.snap.width; temp.height = dom.snap.height;
+        temp.getContext('2d').putImageData(frameBuffer[i], 0, 0);
+        
+        const res = await tesseractWorker.recognize(temp);
+        const txt = normalizePlate(res.data.text.replace(/[^A-Z0-9]/g, ''));
+        if (txt.length >= 5) votes.push(txt);
+        updateLoader(30 + (i*20), `比對第 ${i+1} 幀...`);
+    }
+
+    if (votes.length > 0) {
+        const count = votes.reduce((a, v) => { a[v] = (a[v] || 0) + 1; return a; }, {});
+        const final = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+        
+        dom.plate.innerText = final;
+        if (validateTaiwanMoto(final)) {
+            dom.plate.style.color = var(--success);
+            window.speechSynthesis.speak(new SpeechSynthesisUtterance(`號碼 ${final.split('').join(' ')}`));
+            votes.forEach(v => learnCorrection(v, final));
+        } else {
+            dom.plate.style.color = "#FF9500";
+        }
+    } else { dom.plate.innerText = "無法辨識"; }
+
+    dom.run.disabled = false;
     updateLoader(100, "分析完成");
 };
 
-retryBtn.onclick = () => {
-    snap.style.display = "none";
-    runAiBtn.style.display = "none";
-    retryBtn.style.display = "none";
-    captureBtn.style.display = "block";
-    plateDisplay.innerText = "----";
-    plateDisplay.style.color = "#fff";
+dom.retry.onclick = () => {
+    dom.snap.style.display = "none";
+    dom.run.style.display = "none";
+    dom.retry.style.display = "none";
+    dom.capture.style.display = "block";
+    dom.plate.innerText = "----";
+    dom.plate.style.color = "#fff";
     updateLoader(100, "就緒");
 };
 </script>
