@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>MotoScanner AI Ultra</title>
+    <title>MotoScanner AI Ultra v2.5</title>
     <style>
-        :root { --primary: #007AFF; --success: #34C759; --warning: #FF9500; --bg: #000; }
+        :root { --primary: #007AFF; --success: #34C759; --bg: #000; }
         body { margin: 0; font-family: -apple-system, sans-serif; background: var(--bg); color: #fff; overflow: hidden; }
         .app-container { display: flex; flex-direction: column; height: 100vh; }
         
@@ -14,21 +14,30 @@
         #status-text { color: var(--primary); }
         #timer-text { color: #888; font-family: monospace; }
         .progress-bar-bg { width: 100%; height: 8px; background: #222; border-radius: 4px; overflow: hidden; }
-        #progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #007AFF, #5AC8FA, #34C759); transition: width 0.4s; }
+        #progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #007AFF, #5AC8FA, #34C759); transition: width 0.3s; }
 
         .scanner-section { flex: 1; position: relative; overflow: hidden; background: #111; display: flex; align-items: center; justify-content: center; }
         #video, #snap-preview { width: 100%; height: 100%; object-fit: cover; position: absolute; }
         #snap-preview { display: none; z-index: 5; }
         
         .scan-overlay { position: absolute; width: 100%; height: 100%; z-index: 6; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-        .scan-frame { width: 85%; height: 25%; position: relative; border: 2px solid var(--primary); box-shadow: 0 0 0 2000px rgba(0,0,0,0.7); border-radius: 8px; }
+        /* 稍微拉寬掃描框，並加上呼吸燈效果提示使用者 */
+        .scan-frame { 
+            width: 90%; height: 28%; 
+            position: relative; 
+            border: 3px solid var(--primary); 
+            box-shadow: 0 0 15px rgba(0, 122, 255, 0.5), 0 0 0 2000px rgba(0,0,0,0.7); 
+            border-radius: 12px;
+            animation: breathe 2s infinite ease-in-out;
+        }
+        @keyframes breathe { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
 
         footer { padding: 20px; background: rgba(0,0,0,0.95); border-top: 1px solid #333; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
-        #plate-number { font-size: 52px; font-weight: 900; text-align: center; margin-bottom: 10px; height: 60px; color: #fff; letter-spacing: 4px; }
-        #info { font-size: 13px; color: #888; text-align: center; margin-bottom: 15px; min-height: 1.2em; }
+        #plate-number { font-size: 52px; font-weight: 900; text-align: center; margin-bottom: 10px; height: 65px; color: #fff; letter-spacing: 4px; }
+        #info { font-size: 14px; color: #aaa; text-align: center; margin-bottom: 20px; min-height: 1.5em; }
         
         .btn-group { display: flex; gap: 12px; width: 100%; max-width: 600px; margin: 0 auto; }
-        button { flex: 1; padding: 18px 0; border-radius: 12px; border: none; font-size: 18px; font-weight: bold; color: white; background: var(--primary); }
+        button { flex: 1; padding: 20px 0; border-radius: 14px; border: none; font-size: 20px; font-weight: bold; color: white; background: var(--primary); cursor: pointer; }
         button:disabled { opacity: 0.1; }
         #retryBtn { background: #333; }
         #runAiBtn { background: var(--success); }
@@ -38,7 +47,7 @@
 <div class="app-container">
     <header>
         <div class="status-header">
-            <span id="status-text">初始化診斷中...</span>
+            <span id="status-text">初始化系統中...</span>
             <span id="timer-text">--s</span>
         </div>
         <div class="progress-bar-bg"><div id="progress-fill"></div></div>
@@ -52,7 +61,7 @@
 
     <footer>
         <div id="plate-number">----</div>
-        <div id="info">準備 AI 辨識模組...</div>
+        <div id="info">準備進階影像引擎...</div>
         <div class="btn-group">
             <button id="startBtn" disabled>啟動鏡頭</button>
             <button id="captureBtn" style="display:none">截圖定格</button>
@@ -66,7 +75,7 @@
 <script src="https://docs.opencv.org/4.7.0/opencv.js" async onload="onOpenCvReady()"></script>
 
 <script>
-let cvReady = false, ocrReady = false, worker = null, frameBuffer = [], timeLeft = 20;
+let cvReady = false, ocrReady = false, worker = null, frameBuffer = [], timeLeft = 15;
 
 const el = {
     status: document.getElementById('status-text'),
@@ -82,7 +91,6 @@ const el = {
     snap: document.getElementById('snap-preview')
 };
 
-// =================== 進度控制 ===================
 function updateProgress(p, msg) {
     el.progress.style.width = p + "%";
     if (msg) el.status.innerText = msg;
@@ -90,7 +98,7 @@ function updateProgress(p, msg) {
         clearInterval(timerInterval);
         el.timer.innerText = "READY";
         el.start.disabled = false;
-        el.info.innerText = "請啟動鏡頭，並將車牌充滿藍框";
+        el.info.innerText = "請務必將「完整的車牌」充滿藍框";
     }
 }
 
@@ -98,60 +106,61 @@ const timerInterval = setInterval(() => { if (timeLeft > 1) { timeLeft--; el.tim
 
 function onOpenCvReady() {
     cvReady = true;
-    updateProgress(40, "視覺核心已就緒");
-    initTesseract();
+    updateProgress(40, "視覺核心就緒");
+    initOCR();
 }
 
-async function initTesseract() {
+async function initOCR() {
     try {
         worker = await Tesseract.createWorker('eng', 1, {
-            logger: m => { if (m.status === 'loading language traineddata') updateProgress(55 + (m.progress * 30), "下載文字模型..."); }
+            logger: m => { if (m.status === 'loading language traineddata') updateProgress(55 + (m.progress * 45), "優化 AI 辨識力..."); }
         });
         await worker.setParameters({
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
             tessedit_pageseg_mode: '7'
         });
-        updateProgress(100, "AI 引擎完全就緒");
-    } catch (e) { el.status.innerText = "載入失敗，請重整"; }
+        updateProgress(100, "系統已完全就緒");
+    } catch (e) { el.status.innerText = "載入失敗，請重整頁面"; }
 }
 
-// =================== 影像處理 (辨識力關鍵) ===================
+// =================== 進階影像處理：字體修復 ===================
 async function enhancePlate(imgData) {
     if (!cvReady) return imgData;
     
     let src = cv.matFromImageData(imgData);
     let dst = new cv.Mat();
     
-    // 1. 灰階化
+    // 1. 轉灰階
     cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
     
-    // 2. 銳化處理 (增加邊緣對比)
-    let laplacian = new cv.Mat();
-    cv.Laplacian(dst, laplacian, cv.CV_8U, 1, 1, 0, cv.BORDER_DEFAULT);
-    cv.subtract(dst, laplacian, dst);
+    // 2. 對比增強 (CLAHE) - 處理車牌過髒或白平衡問題
+    let clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
+    clahe.apply(dst, dst);
     
-    // 3. 自適應二值化 (處理陰影與反光)
-    cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 21, 10);
+    // 3. 高斯模糊去噪
+    cv.GaussianBlur(dst, dst, new cv.Size(3, 3), 0);
     
-    // 4. 降噪 (去除背景顆粒)
-    let M = cv.Mat.ones(2, 2, cv.CV_8U);
-    cv.morphologyEx(dst, dst, cv.MORPH_CLOSE, M);
+    // 4. 自適應二值化 (更精細的參數)
+    cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 15, 9);
+    
+    // 5. 形態學膨脹 (將斑駁的字體筆畫接回來)
+    let M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(2, 2));
+    cv.dilate(dst, dst, M);
     
     let canvas = document.createElement('canvas');
     cv.imshow(canvas, dst);
     
-    src.delete(); dst.delete(); laplacian.delete(); M.delete();
+    src.delete(); dst.delete(); clahe.delete(); M.delete();
     return canvas;
 }
 
-// =================== 事件邏輯 ===================
 el.start.onclick = async () => {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } } });
         el.video.srcObject = stream;
         el.start.style.display = "none";
         el.capture.style.display = "block";
-    } catch (e) { alert("鏡頭啟動失敗：請確保在 HTTPS 環境下執行"); }
+    } catch (e) { alert("鏡頭權限錯誤，請檢查 HTTPS 設定"); }
 };
 
 el.capture.onclick = async () => {
@@ -160,15 +169,15 @@ el.capture.onclick = async () => {
     c.width = el.video.videoWidth; c.height = el.video.videoHeight;
     const ctx = c.getContext('2d');
     
-    // 連拍 3 張增加成功率
-    for(let i=0; i<3; i++) {
+    // 為了投票精確，連拍幀數增加到 4 幀
+    for(let i=0; i<4; i++) {
         ctx.drawImage(el.video, 0, 0);
         frameBuffer.push(ctx.getImageData(0, 0, c.width, c.height));
-        await new Promise(r => setTimeout(r, 150));
+        await new Promise(r => setTimeout(r, 100));
     }
     
     el.snap.width = c.width; el.snap.height = c.height;
-    el.snap.getContext('2d').putImageData(frameBuffer[2], 0, 0);
+    el.snap.getContext('2d').putImageData(frameBuffer[3], 0, 0);
     el.snap.style.display = "block";
     el.capture.style.display = "none";
     el.run.style.display = "block";
@@ -177,7 +186,7 @@ el.capture.onclick = async () => {
 
 el.run.onclick = async () => {
     el.run.disabled = true;
-    el.status.innerText = "多幀 AI 運算中...";
+    el.status.innerText = "AI 正在分析完整號碼...";
     
     let votes = [];
     for (let i = 0; i < frameBuffer.length; i++) {
@@ -185,6 +194,7 @@ el.run.onclick = async () => {
         const res = await worker.recognize(enhanced);
         const txt = res.data.text.replace(/[^A-Z0-9]/g, '').replace(/O/g,'0').replace(/I/g,'1');
         if (txt.length >= 5) votes.push(txt);
+        el.info.innerText = `分析中 (${i+1}/4 幀)...`;
     }
     
     if (votes.length > 0) {
@@ -192,14 +202,15 @@ el.run.onclick = async () => {
         const final = Object.keys(counts).sort((a,b) => counts[b] - counts[a])[0];
         el.plate.innerText = final;
         el.plate.style.color = "var(--success)";
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance("號碼 " + final));
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance("辨識結果 " + final));
     } else {
         el.plate.innerText = "無法辨識";
         el.plate.style.color = "red";
+        el.info.innerText = "請確保拍到「完整」車牌（包含字母與數字）";
     }
     
     el.run.disabled = false;
-    el.status.innerText = "分析完成";
+    el.status.innerText = "辨識結束";
 };
 
 el.retry.onclick = () => {
